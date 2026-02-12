@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Forum SPA</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar__inner">
+      <a class="brand" href="#/">Forum</a>
+
+      <nav class="nav">
+        <a class="nav__link" href="#/">Vlákna</a>
+        <a class="nav__link auth-only" href="#/new-thread" style="display:none">Nové vlákno</a>
+      </nav>
+
+      <div class="auth">
+        <span class="auth__status muted" id="authStatus">nepřihlášen</span>
+        <a class="btn" id="btnLoginLink" href="#/login">Login</a>
+        <a class="btn" id="btnRegisterLink" href="#/register">Registrace</a>
+        <button class="btn btn--danger" id="btnLogout" style="display:none">Logout</button>
+      </div>
+    </div>
+  </header>
+
+
+  
+  <main class="wrap">
+    <div id="flash" class="flash" style="display:none"></div>
+    <div id="app"></div>
+  </main>
+
+  <footer class="wrap footer muted">
+    Frontend SPA • backend přes REST API
+  </footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
