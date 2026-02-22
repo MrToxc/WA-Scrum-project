@@ -5,11 +5,11 @@
 ---
 
 ## Obsah
-- [1. Celková dokumentace](#1-celková-dokumentace)
-  - [1.1 Co aplikace dělá](#11-co-aplikace-dělá)
+- [1. Celková dokumentace](#1-celkova-dokumentace)
+  - [1.1 Co aplikace dělá](#11-co-aplikace-dela)
   - [1.2 Tech stack](#12-tech-stack)
   - [1.3 Autentizace](#13-autentizace)
-  - [1.4 Datový model](#14-datový-model)
+  - [1.4 Datový model](#14-datovy-model)
   - [1.5 Diagramy](#15-diagramy)
   - [1.6 Konvence API](#16-konvence-api)
 - [2. Pro VPS admina](#2-pro-vps-admina)
@@ -19,8 +19,10 @@
 
 ---
 
+<a id="1-celkova-dokumentace"></a>
 # 1. Celková dokumentace
 
+<a id="11-co-aplikace-dela"></a>
 ## 1.1 Co aplikace dělá
 Ječná Forum je jednoduché fórum:
 - uživatel si vytvoří účet **jen pomocí veřejného `username`**
@@ -30,10 +32,11 @@ Ječná Forum je jednoduché fórum:
 - uživatel může vytvářet / upravovat / mazat své posty a komentáře
 - čtení postů a komentářů je veřejné
 
-> Role v týmu a očekávání (sysadmin/dokumentarista/scrum master) vychází ze zadání projektu. fileciteturn0file2 fileciteturn0file1 fileciteturn0file3
+> Role v týmu a očekávání (sysadmin/dokumentarista/scrum master) vychází ze zadání projektu.
 
 ---
 
+<a id="12-tech-stack"></a>
 ## 1.2 Tech stack
 - Backend: **PHP + Laravel**
 - API autentizace: **Laravel Sanctum (Personal Access Tokens)**
@@ -42,6 +45,7 @@ Ječná Forum je jednoduché fórum:
 
 ---
 
+<a id="13-autentizace"></a>
 ## 1.3 Autentizace
 
 ### 1.3.1 Základní princip
@@ -58,10 +62,10 @@ Proto ukládáme i:
   - bez `APP_KEY` ho útočník nedokáže snadno dopočítat
 
 **Login flow:**
-1) z requestu vezmeme `password`  
-2) spočítáme `lookup`  
-3) najdeme usera přes `where(password_lookup = lookup)`  
-4) ověříme `Hash::check(password, user.password)`  
+1) z requestu vezmeme `password`
+2) spočítáme `lookup`
+3) najdeme usera přes `where(password_lookup = lookup)`
+4) ověříme `Hash::check(password, user.password)`
 5) vydáme Sanctum token
 
 ### 1.3.3 Token policy (jednoduché pro uživatele)
@@ -70,6 +74,7 @@ Proto ukládáme i:
 
 ---
 
+<a id="14-datovy-model"></a>
 ## 1.4 Datový model
 
 ### 1.4.1 Pravidla mazání (CASCADE)
@@ -83,11 +88,12 @@ Cizí klíče nejsou nullable: obsah vždy musí mít autora a vztahy.
 ### 1.4.2 Validační limity (ochrana proti extrémně dlouhým textům)
 - `posts.title`: min 5, max 255
 - `posts.body`: min 5, max 8191
-- `comments.body`: min 2, max 2000  
+- `comments.body`: min 2, max 2000
 (Validace probíhá v controllerech.)
 
 ---
 
+<a id="15-diagramy"></a>
 ## 1.5 Diagramy
 
 ### 1.5.1 ERD (entitně-relační diagram)
@@ -167,6 +173,7 @@ flowchart LR
 
 ---
 
+<a id="16-konvence-api"></a>
 ## 1.6 Konvence API
 - Base URL: `http://<host>/api/v1`
 - JSON request/response
@@ -181,6 +188,7 @@ flowchart LR
 
 ---
 
+<a id="2-pro-vps-admina"></a>
 # 2. Pro VPS admina
 
 ## 2.1 Co musí mít nainstalované
@@ -264,10 +272,11 @@ chown -R www-data:www-data storage bootstrap/cache
 
 ---
 
+<a id="3-pro-dokumentaristu"></a>
 # 3. Pro dokumentaristu
 
 ## 3.1 Co máš zapisovat (prakticky)
-Tvoje role v projektu: kontrolovat požadavky vs. skutečný kód + spravovat dokumentaci. fileciteturn0file1 fileciteturn0file3
+Tvoje role v projektu: kontrolovat požadavky vs. skutečný kód + spravovat dokumentaci.
 
 ### Checklist pro dokumentaristu
 - ✅ Popis produktu: co fórum dělá, pro koho je určené
@@ -287,6 +296,7 @@ Tvoje role v projektu: kontrolovat požadavky vs. skutečný kód + spravovat do
 
 ---
 
+<a id="4-pro-fe-developera"></a>
 # 4. Pro FE developera
 
 ## 4.1 Jak se autentizuje FE
@@ -295,8 +305,8 @@ Tvoje role v projektu: kontrolovat požadavky vs. skutečný kód + spravovat do
   - `Authorization: Bearer <TOKEN>`
 
 **Doporučený FE flow:**
-1) Registrace → FE dostane `password` a `token`  
-2) FE zobrazí `password` a donutí uživatele uložit (je to jediné zobrazení)  
+1) Registrace → FE dostane `password` a `token`
+2) FE zobrazí `password` a donutí uživatele uložit (je to jediné zobrazení)
 3) Při startu appky:
    - pokud mám token → zavolám `/auth/me`
    - pokud 200 → user je přihlášen
@@ -378,7 +388,7 @@ Tvoje role v projektu: kontrolovat požadavky vs. skutečný kód + spravovat do
 - 403 pokud nejsi autor
 
 #### DELETE `/posts/{post}` (auth + autor)
-- 204 No Content  
+- 204 No Content
 - Pozn.: smazání postu smaže komentáře (cascade).
 
 ---
@@ -412,10 +422,11 @@ Tvoje role v projektu: kontrolovat požadavky vs. skutečný kód + spravovat do
 
 ---
 
+<a id="5-pro-scrum-mastera"></a>
 # 5. Pro Scrum mastera
 
 ## 5.1 Co sledovat
-Scrum master eviduje práci, hlídá plán a tabulky. fileciteturn0file1 fileciteturn0file3
+Scrum master eviduje práci, hlídá plán a tabulky.
 
 ### Doporučená týmová tabulka (minimum)
 - Backlog item (požadavek ID)
@@ -433,6 +444,7 @@ Scrum master eviduje práci, hlídá plán a tabulky. fileciteturn0file1�
 
 ---
 
+<a id="quickstart-pro-lokalni-vyvoj"></a>
 ## Quickstart pro lokální vývoj (pro kohokoliv)
 
 ### Požadavky
@@ -442,8 +454,8 @@ Scrum master eviduje práci, hlídá plán a tabulky. fileciteturn0file1�
 
 ### Kroky
 ```bash
-git clone <REPO_URL>
-cd <REPO_DIR>
+git clone https://github.com/MrToxc/WA-Scrum-project.git
+cd WA-Scrum-project/forum-api-app
 composer install
 cp .env.example .env
 php artisan key:generate
