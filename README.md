@@ -1,4 +1,4 @@
-# Ječná Forum – API & Deployment dokumentace (v1.0)
+# Ječná Forum – API & Deployment dokumentace (v1)
 
 > Cíl: co nejjednodušší onboarding pro celý tým (FE, sysadmin/VPS, dokumentarista, scrum master) + jedno místo pro všechny informace.
 
@@ -442,8 +442,8 @@ Scrum master eviduje práci, hlídá plán a tabulky. fileciteturn0file1�
 
 ### Kroky
 ```bash
-git clone https://github.com/MrToxc/WA-Scrum-project.git
-cd WA-Scrum-project/forum-api-app
+git clone <REPO_URL>
+cd <REPO_DIR>
 composer install
 cp .env.example .env
 php artisan key:generate
