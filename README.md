@@ -422,6 +422,33 @@ Tvoje role v projektu: kontrolovat požadavky vs. skutečný kód + spravovat do
 
 ---
 
+## 4.4 Zobrazení stavu „editováno“
+
+API vrací pouze čas vytvoření a čas poslední úpravy položky:
+
+- `created_at` – čas vytvoření
+- `updated_at` – čas poslední úpravy
+
+Frontend určuje, zda byl post nebo komentář editován, porovnáním těchto hodnot.
+
+### Pravidlo
+Položka se považuje za **editovanou**, pokud platí:
+
+`updated_at - created_at > 5 sekund`
+
+Pokud je rozdíl ≤ 5 sekund, položka se považuje za needitovanou (tolerance kvůli časovému zápisu při vytvoření).
+
+### Příklad
+- created_at: 12:00:00, updated_at: 12:00:03 → needitováno  
+- created_at: 12:00:00, updated_at: 12:00:12 → editováno (zobrazit „Edited“)
+
+### Poznámky
+- Pravidlo platí pro posty i komentáře.
+- Pokud `updated_at` chybí nebo je null, položka se považuje za needitovanou.
+- Časy jsou očekávány ve stejném formátu (ISO 8601).
+
+---
+
 <a id="5-pro-scrum-mastera"></a>
 # 5. Pro Scrum mastera
 
