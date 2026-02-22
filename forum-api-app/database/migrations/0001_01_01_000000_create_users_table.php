@@ -6,9 +6,40 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+
+
+    public function up(): void
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+
+            // registrace pouze username
+            $table->string('username')->unique();
+
+            // normální hash hesla (bcrypt/argon)
+            $table->string('password');
+
+            // deterministický otisk hesla pro vyhledání usera při loginu jen přes password
+            $table->string('password_lookup')->unique();
+
+            $table->rememberToken();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('users');
+    }
+
+
+
+
     /**
      * Run the migrations.
      */
+
+    /*
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
@@ -39,11 +70,12 @@ return new class extends Migration
 
     /**
      * Reverse the migrations.
-     */
+     *
+     * /*
     public function down(): void
     {
         Schema::dropIfExists('users');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
-    }
+    */
 };

@@ -1,8 +1,8 @@
 <?php
 
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\PostController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 //Route::get('/user', function (Request $request) {
@@ -19,42 +19,52 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
 
     /*
-    |--------------------------------------------------------------------------
-    | POSTS
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
+    | AUTH
+    |----------------------------------------------------------------------
     */
+    Route::prefix('auth')->group(function () {
+        Route::post('/register', [AuthController::class, 'register']); // POST /api/v1/auth/register
+        Route::post('/login',    [AuthController::class, 'login']);    // POST /api/v1/auth/login
 
-    // List posts (paginace + per_page)
-    Route::get('/posts', [PostController::class, 'index']);
-
-    // Detail postu + komentáře
-    Route::get('/posts/{post}', [PostController::class, 'show']);
-
-    // Vytvořit post
-    Route::post('/posts', [PostController::class, 'store']);
-
-    // Upravit post
-    Route::put('/posts/{post}', [PostController::class, 'update']);
-
-    // Smazat post
-    Route::delete('/posts/{post}', [PostController::class, 'destroy']);
-
+        // chráněné (token musí být poslaný)
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::post('/logout', [AuthController::class, 'logout']); // POST /api/v1/auth/logout
+            Route::get('/me',      [AuthController::class, 'me']);     // GET  /api/v1/auth/me
+        });
+    });
 
     /*
-    |--------------------------------------------------------------------------
-    | COMMENTS
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
+    | POSTS
+    |----------------------------------------------------------------------
     */
 
-    // Vytvořit komentář k postu
-    Route::post('/posts/{post}/comments', [CommentController::class, 'store']);
+    // veřejné čtení
+    Route::get('/posts',        [PostController::class, 'index']);
+    Route::get('/posts/{post}', [PostController::class, 'show']);
 
-    // komentare k postu
+    // doporučeně chránit zápis (pokud chceš veřejný zápis, middleware smaž)
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/posts',        [PostController::class, 'store']);
+        Route::put('/posts/{post}',  [PostController::class, 'update']);
+        Route::delete('/posts/{post}', [PostController::class, 'destroy']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | COMMENTS
+    |----------------------------------------------------------------------
+    */
+
+    // veřejné čtení komentářů k postu
     Route::get('/posts/{post}/comments', [CommentController::class, 'index']);
 
-    // Upravit komentář
-    Route::put('/comments/{comment}', [CommentController::class, 'update']);
+    // doporučeně chránit zápis/edit/smazání
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/posts/{post}/comments', [CommentController::class, 'store']);
+        Route::put('/comments/{comment}',     [CommentController::class, 'update']);
+        Route::delete('/comments/{comment}',  [CommentController::class, 'destroy']);
+    });
 
-    // Smazat komentář
-    Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
 });

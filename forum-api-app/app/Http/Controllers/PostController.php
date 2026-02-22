@@ -54,10 +54,10 @@ class PostController extends Controller
      */
     public function show(Post $post)
     {
-        //Po dodelani referencni integrity
-        $post->load(['comments' => function ($q) {
-            $q->orderBy('created_at', 'asc'); // nebo desc
-        }]);
+        //nejspis to radeji oddelim, je to restove cistejsi
+        //$post->load(['comments' => function ($q) {
+        //    $q->orderBy('created_at', 'asc'); // nebo desc
+        //}]);
         return ['data' => $post];
     }
 
