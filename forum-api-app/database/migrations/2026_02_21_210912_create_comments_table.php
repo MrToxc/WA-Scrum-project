@@ -6,25 +6,30 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('comments', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('post_id')->constrained()->nullOnDelete();
 
-            $table->string('body');
+            $table->foreignId('user_id')
+                ->index()
+                ->constrained()
+                ->cascadeOnDelete();  // delete user => delete his comments
+
+
+            $table->foreignId('post_id')
+                ->index()
+                ->constrained()
+                ->cascadeOnDelete();  // delete post => delete comments under it
+
+
+            $table->text('body');
+
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('comments');

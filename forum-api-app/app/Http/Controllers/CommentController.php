@@ -26,14 +26,19 @@ class CommentController extends Controller
     public function store(Post $post, Request $request)
     {
         $fields = $request->validate([
-            'body' => 'required|min:2|max:1000',
+            'body' => 'required|string|min:2|max:2000',
         ]);
 
-        $comment = $post->comments()->create($fields);
+        $comment = $post->comments()->make([
+            'body' => $fields['body'],
+        ]);
 
-        return response()->json([
-            'data' => $comment
-        ], 201);
+        $comment->user()->associate($request->user()); // nastaví user_id bezpečně
+        $comment->save();
+
+        $comment->load('user:id,username');
+
+        return response()->json(['data' => $comment], 201);
     }
 
     /**

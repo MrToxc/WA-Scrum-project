@@ -14,21 +14,20 @@ return new class extends Migration
         Schema::create('posts', function (Blueprint $table) {
             $table->id();
 
-            //TODO zmenit
-            $table->foreignId('user_id')
-                ->nullable()
-                ->constrained()
-                ->nullOnDelete();
 
-            $table->string('title');
+            $table->foreignId('user_id')
+                ->index()            // index = rychlejší JOIN/filtry
+                ->constrained()          // references id on users
+                ->cascadeOnDelete();      // když se smaže user, smažou se jeho posty
+
+
+            $table->string('title', 255);
             $table->text('body');
+
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('posts');
