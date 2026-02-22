@@ -166,7 +166,7 @@ sequenceDiagram
 ### 1.5.4 Deployment diagram (jednoduše)
 ```mermaid
 flowchart LR
-  FE[Frontend (React/Vue/...) ] -->|HTTPS + Bearer token| NGINX[Nginx/Apache]
+  FE["Frontend (React/Vue/...)"] -->|HTTPS + Bearer token| NGINX[Nginx/Apache]
   NGINX --> PHPFPM[PHP-FPM + Laravel]
   PHPFPM --> DB[(MySQL)]
 ```
