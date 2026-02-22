@@ -204,8 +204,8 @@ flowchart LR
 
 ### 2.2.1 Klon a instalace
 ```bash
-git clone <REPO_URL>
-cd <REPO_DIR>
+git clone https://github.com/MrToxc/WA-Scrum-project.git
+cd WA-Scrum-project/forum-api-app
 
 composer install --no-dev --optimize-autoloader
 cp .env.example .env
