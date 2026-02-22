@@ -14,10 +14,11 @@ class CommentController extends Controller
     public function index(Post $post, Request $request)
     {
         $comments = $post->comments()
+            ->with(['user:id,username'])
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return ['data' => $comments];
+        return response()->json(['data' => $comments]);
     }
 
     /**
@@ -54,20 +55,29 @@ class CommentController extends Controller
      */
     public function update(Request $request, Comment $comment)
     {
+        if ($comment->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $fields = $request->validate([
-            'body' => 'required|min:2|max:1000',
+            'body' => 'required|string|min:2|max:2000',
         ]);
 
         $comment->update($fields);
 
-        return ['data' => $comment];
+        $comment->load('user:id,username');
+
+        return response()->json(['data' => $comment]);
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Comment $comment)
+    public function destroy(Request $request, Comment $comment)
     {
+        if ($comment->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
         $comment->delete();
 
         return response()->noContent();

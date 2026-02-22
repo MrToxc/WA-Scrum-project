@@ -64,7 +64,7 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $data = $request->validate([
-            'password' => ['required', 'string'],
+            'password' => ['required', 'string', 'max:255'],
         ]);
 
         $lookup = hash_hmac('sha256', $data['password'], config('app.key'));
