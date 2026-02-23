@@ -1,4 +1,4 @@
-import { api, getToken, setAuth, clearAuth, getUsername } from "./api.js";
+import { api, getToken, setAuth, clearAuth, getUsername, getUserId } from "./api.js";
 
 const $app = document.getElementById("app");
 const $flash = document.getElementById("flash");
@@ -21,6 +21,22 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function fmtDate(s) {
+  // backend posílá ISO 8601 – jen lehká humanizace
+  if (!s) return "";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return String(s);
+  return d.toLocaleString();
+}
+
+function isEdited(createdAt, updatedAt) {
+  if (!createdAt || !updatedAt) return false;
+  const c = new Date(createdAt).getTime();
+  const u = new Date(updatedAt).getTime();
+  if (Number.isNaN(c) || Number.isNaN(u)) return false;
+  return (u - c) > 5000; // README: tolerance 5s
+}
+
 function showFlash(message, type = "ok") {
   $flash.className = `flash ${type === "ok" ? "flash--ok" : "flash--err"}`;
   $flash.textContent = message;
@@ -32,7 +48,7 @@ function renderAuthUI() {
   const authed = isAuthed();
   const user = getUsername();
 
-  $authStatus.textContent = authed ? `přihlášen jako ${user}` : "nepřihlášen";
+  $authStatus.textContent = authed ? `přihlášen jako ${user ?? "?"}` : "nepřihlášen";
   $btnLogout.style.display = authed ? "inline-flex" : "none";
   $btnLoginLink.style.display = authed ? "none" : "inline-flex";
   $btnRegisterLink.style.display = authed ? "none" : "inline-flex";
@@ -42,7 +58,8 @@ function renderAuthUI() {
   });
 }
 
-$btnLogout.addEventListener("click", () => {
+$btnLogout.addEventListener("click", async () => {
+  try { await api("/auth/logout", { method: "POST", auth: true }); } catch { /* ignore */ }
   clearAuth();
   renderAuthUI();
   location.hash = "#/";
@@ -54,14 +71,15 @@ function route() {
   const hash = location.hash || "#/";
   const [path, queryString] = hash.slice(1).split("?");
   const parts = path.split("/").filter(Boolean);
+  const qs = new URLSearchParams(queryString || "");
 
-  // / -> threads
-  if (parts.length === 0) return renderThreads();
+  // / -> posts
+  if (parts.length === 0) return renderPosts({ page: Number(qs.get("page") || 1) });
 
   if (parts[0] === "login") return renderLogin();
   if (parts[0] === "register") return renderRegister();
-  if (parts[0] === "new-thread") return renderNewThread();
-  if (parts[0] === "thread" && parts[1]) return renderThreadDetail(parts[1]);
+  if (parts[0] === "new-post") return renderNewPost();
+  if (parts[0] === "post" && parts[1]) return renderPostDetail(parts[1]);
 
   return renderNotFound();
 }
@@ -70,43 +88,98 @@ window.addEventListener("hashchange", route);
 
 // -------- Views --------
 
-async function renderThreads() {
+async function renderPosts({ page = 1 } = {}) {
   $app.innerHTML = `
-    <h1>Vlákna</h1>
+    <div class="row" style="justify-content:space-between; align-items:flex-end;">
+      <div>
+        <h1>Posty</h1>
+        <div class="muted">Veřejné čtení • pro psaní je potřeba token</div>
+      </div>
+      <a class="btn btn--primary auth-only" href="#/new-post" style="display:none">Nový post</a>
+    </div>
     <div class="card muted">Načítám…</div>
   `;
 
   try {
-    const threads = await api("/threads");
+    const perPage = 10;
+    const payload = await api(`/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`);
+    const posts = payload?.data ?? [];
+    const meta = payload?.meta ?? {};
 
-    if (!threads?.length) {
+    if (!posts.length) {
       $app.innerHTML = `
-        <h1>Vlákna</h1>
-        <div class="card muted">Zatím žádná vlákna.</div>
+        <h1>Posty</h1>
+        <div class="card muted">Zatím žádné posty.</div>
       `;
+      renderAuthUI();
       return;
     }
 
-    $app.innerHTML = `
-      <h1>Vlákna</h1>
-      <div class="list">
-        ${threads.map(t => `
-          <div class="card">
-            <div class="thread__meta">
-              <span class="pill">#${escapeHtml(t.id)}</span>
-              <span class="pill">${escapeHtml(t.author ?? "")}</span>
-              <span class="pill">${escapeHtml(t.created_at ?? "")}</span>
-            </div>
-            <h3 style="margin-top:10px">
-              <a href="#/thread/${encodeURIComponent(t.id)}">${escapeHtml(t.title)}</a>
-            </h3>
-            <p class="muted">${escapeHtml((t.content ?? "").slice(0, 140))}${(t.content ?? "").length > 140 ? "…" : ""}</p>
-          </div>
-        `).join("")}
+    const currentUserId = getUserId();
+
+    const pager = `
+      <div class="row" style="justify-content:space-between; align-items:center; margin-top:14px;">
+        <div class="muted">Stránka ${escapeHtml(meta.page ?? page)} / ${escapeHtml(meta.last_page ?? 1)} • Celkem ${escapeHtml(meta.total ?? posts.length)}</div>
+        <div class="row" style="gap:8px;">
+          <a class="btn" href="#/?page=${Math.max(1, (meta.page ?? page) - 1)}" ${((meta.page ?? page) <= 1) ? 'aria-disabled="true" style="pointer-events:none;opacity:.5"' : ""}>←</a>
+          <a class="btn" href="#/?page=${Math.min((meta.last_page ?? page), (meta.page ?? page) + 1)}" ${((meta.page ?? page) >= (meta.last_page ?? page)) ? 'aria-disabled="true" style="pointer-events:none;opacity:.5"' : ""}>→</a>
+        </div>
       </div>
     `;
+
+    $app.innerHTML = `
+      <div class="row" style="justify-content:space-between; align-items:flex-end;">
+        <div>
+          <h1>Posty</h1>
+          <div class="muted">Veřejné čtení • pro psaní je potřeba token</div>
+        </div>
+        <a class="btn btn--primary auth-only" href="#/new-post" style="display:none">Nový post</a>
+      </div>
+
+      <div class="list">
+        ${posts.map(p => {
+          const edited = isEdited(p.created_at, p.updated_at);
+          const isMine = currentUserId != null && p?.user?.id === currentUserId;
+          return `
+            <div class="card">
+              <div class="thread__meta">
+                <span class="pill">#${escapeHtml(p.id)}</span>
+                <span class="pill">${escapeHtml(p?.user?.username ?? "")}</span>
+                <span class="pill">${escapeHtml(fmtDate(p.created_at))}${edited ? " • Edited" : ""}</span>
+                <span class="pill">💬 ${escapeHtml(p.comments_count ?? 0)}</span>
+              </div>
+
+              <h3 style="margin-top:10px">
+                <a href="#/post/${encodeURIComponent(p.id)}">${escapeHtml(p.title)}</a>
+              </h3>
+              <p class="muted">${escapeHtml(String(p.body ?? "").slice(0, 160))}${String(p.body ?? "").length > 160 ? "…" : ""}</p>
+
+              ${isMine ? `
+                <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
+                  <button class="btn" data-action="edit-post" data-id="${escapeHtml(p.id)}">Upravit</button>
+                  <button class="btn btn--danger" data-action="delete-post" data-id="${escapeHtml(p.id)}">Smazat</button>
+                </div>
+              ` : ""}
+            </div>
+          `;
+        }).join("")}
+      </div>
+
+      ${pager}
+    `;
+
+    // bind edit/delete (delegace)
+    $app.querySelectorAll("[data-action='edit-post']").forEach(btn => {
+      btn.addEventListener("click", () => openEditPost(btn.getAttribute("data-id")));
+    });
+    $app.querySelectorAll("[data-action='delete-post']").forEach(btn => {
+      btn.addEventListener("click", () => doDeletePost(btn.getAttribute("data-id")));
+    });
+
+    renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
+    renderAuthUI();
   }
 }
 
@@ -115,37 +188,23 @@ function renderLogin() {
     <h1>Login</h1>
     <div class="card">
       <form id="loginForm">
-        <div class="row">
-          <div style="flex:1; min-width: 240px;">
-            <label class="muted">Username nebo email</label>
-            <input name="user" required placeholder="např. pepa / pepa@email.cz" />
-          </div>
-          <div style="flex:1; min-width: 240px;">
-            <label class="muted">Heslo</label>
-            <input name="pass" required type="password" placeholder="••••••••" />
-          </div>
-        </div>
+        <label class="muted">Heslo (to vygenerované při registraci)</label>
+        <input name="pass" required type="password" placeholder="••••••••" />
         <div style="height:10px"></div>
         <button class="btn btn--primary" type="submit">Přihlásit</button>
       </form>
-      <div class="muted" style="margin-top:10px;">Po loginu se uloží token do localStorage.</div>
+      <div class="muted" style="margin-top:10px;">Pozn.: přihlášení vždy zruší staré tokeny (jen 1 aktivní přihlášení).</div>
     </div>
   `;
 
   document.getElementById("loginForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const fd = new FormData(ev.target);
-    const user = String(fd.get("user") || "").trim();
     const pass = String(fd.get("pass") || "");
 
     try {
-      // backend může chtít username/email v jiném poli – uprav si tady
-      const data = await api("/auth/login", {
-        method: "POST",
-        body: { usernameOrEmail: user, password: pass }
-      });
-
-      setAuth({ token: data.access_token, username: data.username ?? user });
+      const data = await api("/auth/login", { method: "POST", body: { password: pass } });
+      setAuth({ token: data.token, user: data.user });
       renderAuthUI();
       location.hash = "#/";
       showFlash("Přihlášení OK.", "ok");
@@ -160,47 +219,70 @@ function renderRegister() {
     <h1>Registrace</h1>
     <div class="card">
       <form id="regForm">
-        <div class="row">
-          <div style="flex:1; min-width: 240px;">
-            <label class="muted">Username</label>
-            <input name="username" required minlength="3" placeholder="min 3 znaky" />
-          </div>
-          <div style="flex:1; min-width: 240px;">
-            <label class="muted">Email (volitelné)</label>
-            <input name="email" type="email" placeholder="pepa@email.cz" />
-          </div>
-        </div>
+        <label class="muted">Username</label>
+        <input name="username" required minlength="3" placeholder="např. tester1" />
         <div style="height:10px"></div>
-        <label class="muted">Heslo</label>
-        <input name="password" required minlength="6" type="password" placeholder="min 6 znaků" />
-        <div style="height:10px"></div>
-        <button class="btn btn--primary" type="submit">Registrovat</button>
+        <button class="btn btn--primary" type="submit">Vytvořit účet</button>
       </form>
+
+      <div class="muted" style="margin-top:10px;">
+        Účet se vytváří jen pomocí <b>username</b> a backend ti vygeneruje <b>heslo</b>.
+      </div>
     </div>
   `;
 
   document.getElementById("regForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const fd = new FormData(ev.target);
-
     const username = String(fd.get("username") || "").trim();
-    const email = String(fd.get("email") || "").trim();
-    const password = String(fd.get("password") || "");
 
     try {
-      await api("/auth/register", {
-        method: "POST",
-        body: { username, email: email || null, password }
+      const data = await api("/auth/register", { method: "POST", body: { username } });
+
+      // Backend vrátí {username, password, token}
+      setAuth({ token: data.token, user: { id: null, username: data.username } });
+      renderAuthUI();
+
+      // "Password reveal" screen (jen tady)
+      $app.innerHTML = `
+        <h1>Hotovo ✅</h1>
+        <div class="card">
+          <p><b>Tohle heslo uvidíš jen jednou.</b> Ulož si ho (např. do správce hesel).</p>
+          <div class="card" style="background:rgba(0,0,0,.04); border:1px dashed rgba(0,0,0,.25)">
+            <div class="muted">Tvůj tajný klíč (password)</div>
+            <div style="font-size:18px; font-weight:700; margin-top:6px; word-break:break-all;">${escapeHtml(data.password)}</div>
+          </div>
+          <div class="row" style="gap:8px; margin-top:12px; flex-wrap:wrap;">
+            <button class="btn" id="btnCopyPass">Kopírovat</button>
+            <a class="btn btn--primary" href="#/">Pokračovat na posty</a>
+            <a class="btn" href="#/login">Přejít na login</a>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("btnCopyPass").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(String(data.password));
+          showFlash("Zkopírováno do schránky.", "ok");
+        } catch {
+          showFlash("Kopírování se nepovedlo (prohlížeč nepovolil). Označ a zkopíruj ručně.", "err");
+        }
       });
-      location.hash = "#/login";
-      showFlash("Registrace OK. Teď se přihlas.", "ok");
+
+      // doplníme user_id přes /auth/me (pokud token už funguje)
+      try {
+        const me = await api("/auth/me", { auth: true });
+        setAuth({ token: getToken(), user: me });
+        renderAuthUI();
+      } catch { /* ignore */ }
+
     } catch (e) {
       showFlash(e.message, "err");
     }
   });
 }
 
-function renderNewThread() {
+function renderNewPost() {
   if (!isAuthed()) {
     location.hash = "#/login";
     showFlash("Musíš se přihlásit.", "err");
@@ -208,132 +290,236 @@ function renderNewThread() {
   }
 
   $app.innerHTML = `
-    <h1>Nové vlákno</h1>
+    <div class="row" style="justify-content:space-between; align-items:flex-end;">
+      <h1>Nový post</h1>
+      <a class="btn" href="#/">← Zpět</a>
+    </div>
+
     <div class="card">
-      <form id="newThreadForm">
+      <form id="newPostForm">
         <label class="muted">Nadpis</label>
-        <input name="title" required minlength="3" placeholder="např. Jak nasadit Laravel na VPS?" />
+        <input name="title" required minlength="5" maxlength="255" placeholder="min 5 znaků" />
         <div style="height:10px"></div>
-        <label class="muted">Obsah</label>
-        <textarea name="content" required placeholder="Text…"></textarea>
+        <label class="muted">Text</label>
+        <textarea name="body" required minlength="5" maxlength="8191" placeholder="Text…"></textarea>
         <div style="height:10px"></div>
         <button class="btn btn--primary" type="submit">Vytvořit</button>
       </form>
     </div>
   `;
 
-  document.getElementById("newThreadForm").addEventListener("submit", async (ev) => {
+  document.getElementById("newPostForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const fd = new FormData(ev.target);
     const title = String(fd.get("title") || "").trim();
-    const content = String(fd.get("content") || "").trim();
+    const body = String(fd.get("body") || "").trim();
 
     try {
-      const created = await api("/threads", {
-        method: "POST",
-        auth: true,
-        body: { title, content }
-      });
-      location.hash = `#/thread/${encodeURIComponent(created.id)}`;
-      showFlash("Vlákno vytvořeno.", "ok");
+      const created = await api("/posts", { method: "POST", auth: true, body: { title, body } });
+      const id = created?.data?.id;
+      location.hash = id ? `#/post/${encodeURIComponent(id)}` : "#/";
+      showFlash("Post vytvořen.", "ok");
     } catch (e) {
       showFlash(e.message, "err");
     }
   });
 }
 
-async function renderThreadDetail(id) {
+async function renderPostDetail(id) {
   $app.innerHTML = `
-    <h1>Vlákno #${escapeHtml(id)}</h1>
+    <h1>Post #${escapeHtml(id)}</h1>
     <div class="card muted">Načítám…</div>
   `;
 
   try {
-    const thread = await api(`/threads/${encodeURIComponent(id)}`);
-    const posts = await api(`/threads/${encodeURIComponent(id)}/posts`);
+    const postWrap = await api(`/posts/${encodeURIComponent(id)}`);
+    const post = postWrap?.data;
+    const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments`);
+    const comments = commentsWrap?.data ?? [];
+
+    const currentUserId = getUserId();
+    const isMinePost = currentUserId != null && post?.user?.id === currentUserId;
+
+    const editedPost = isEdited(post?.created_at, post?.updated_at);
 
     $app.innerHTML = `
       <div class="row" style="justify-content:space-between; align-items:flex-end;">
         <div>
-          <h1>${escapeHtml(thread.title)}</h1>
+          <h1>${escapeHtml(post?.title ?? "")}</h1>
           <div class="thread__meta muted">
-            <span class="pill">#${escapeHtml(thread.id)}</span>
-            <span class="pill">${escapeHtml(thread.author ?? "")}</span>
-            <span class="pill">${escapeHtml(thread.created_at ?? "")}</span>
+            <span class="pill">#${escapeHtml(post?.id ?? id)}</span>
+            <span class="pill">${escapeHtml(post?.user?.username ?? "")}</span>
+            <span class="pill">${escapeHtml(fmtDate(post?.created_at))}${editedPost ? " • Edited" : ""}</span>
+            <span class="pill">💬 ${escapeHtml(post?.comments_count ?? comments.length)}</span>
           </div>
         </div>
         <a class="btn" href="#/">← Zpět</a>
       </div>
 
       <div class="card">
-        <p>${escapeHtml(thread.content)}</p>
-      </div>
-
-
-
-      
-      <h2>Příspěvky</h2>
-      <div class="list">
-        ${(posts?.length ? posts : []).map(p => `
-          <div class="card">
-            <div class="thread__meta muted">
-              <span class="pill">#${escapeHtml(p.id)}</span>
-              <span class="pill">${escapeHtml(p.author ?? "")}</span>
-              <span class="pill">${escapeHtml(p.created_at ?? "")}</span>
-            </div>
-            <p style="margin-top:10px">${escapeHtml(p.content)}</p>
+        <p style="white-space:pre-wrap">${escapeHtml(post?.body ?? "")}</p>
+        ${isMinePost ? `
+          <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
+            <button class="btn" id="btnEditPost">Upravit</button>
+            <button class="btn btn--danger" id="btnDeletePost">Smazat</button>
           </div>
-        `).join("")}
-        ${(!posts || posts.length === 0) ? `<div class="card muted">Zatím žádné příspěvky.</div>` : ""}
+        ` : ""}
       </div>
 
-      <div class="card" id="replyBox"></div>
+      <h2>Komentáře</h2>
+      <div class="list">
+        ${comments.map(c => {
+          const edited = isEdited(c.created_at, c.updated_at);
+          const isMine = currentUserId != null && c?.user?.id === currentUserId;
+          return `
+            <div class="card">
+              <div class="thread__meta muted">
+                <span class="pill">#${escapeHtml(c.id)}</span>
+                <span class="pill">${escapeHtml(c?.user?.username ?? "")}</span>
+                <span class="pill">${escapeHtml(fmtDate(c.created_at))}${edited ? " • Edited" : ""}</span>
+              </div>
+              <p style="margin-top:10px; white-space:pre-wrap">${escapeHtml(c.body)}</p>
+              ${isMine ? `
+                <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
+                  <button class="btn" data-action="edit-comment" data-id="${escapeHtml(c.id)}">Upravit</button>
+                  <button class="btn btn--danger" data-action="delete-comment" data-id="${escapeHtml(c.id)}">Smazat</button>
+                </div>
+              ` : ""}
+            </div>
+          `;
+        }).join("")}
+        ${comments.length === 0 ? `<div class="card muted">Zatím žádné komentáře.</div>` : ""}
+      </div>
+
+      <div class="card" id="commentBox"></div>
     `;
 
-    renderReplyBox(id);
+    if (isMinePost) {
+      document.getElementById("btnEditPost").addEventListener("click", () => openEditPost(id, post));
+      document.getElementById("btnDeletePost").addEventListener("click", () => doDeletePost(id));
+    }
+
+    $app.querySelectorAll("[data-action='edit-comment']").forEach(btn => {
+      btn.addEventListener("click", () => openEditComment(btn.getAttribute("data-id")));
+    });
+    $app.querySelectorAll("[data-action='delete-comment']").forEach(btn => {
+      btn.addEventListener("click", () => doDeleteComment(btn.getAttribute("data-id"), id));
+    });
+
+    renderCommentBox(id);
+    renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
+    renderAuthUI();
   }
 }
 
-function renderReplyBox(threadId) {
-  const box = document.getElementById("replyBox");
+function renderCommentBox(postId) {
+  const box = document.getElementById("commentBox");
   if (!box) return;
 
   if (!isAuthed()) {
     box.innerHTML = `
-      <div class="muted">Pro přidání příspěvku se přihlas.</div>
+      <div class="muted">Pro přidání komentáře se přihlas.</div>
       <a class="btn btn--primary" href="#/login">Login</a>
     `;
     return;
   }
 
   box.innerHTML = `
-    <h3 style="margin-top:0">Napsat příspěvek</h3>
-    <form id="replyForm">
-      <textarea name="content" required placeholder="Odpověď…"></textarea>
+    <h3 style="margin-top:0">Přidat komentář</h3>
+    <form id="commentForm">
+      <textarea name="body" required minlength="2" maxlength="2000" placeholder="Komentář…"></textarea>
       <div style="height:10px"></div>
       <button class="btn btn--primary" type="submit">Odeslat</button>
     </form>
   `;
 
-  document.getElementById("replyForm").addEventListener("submit", async (ev) => {
+  document.getElementById("commentForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const fd = new FormData(ev.target);
-    const content = String(fd.get("content") || "").trim();
+    const body = String(fd.get("body") || "").trim();
 
     try {
-      await api(`/threads/${encodeURIComponent(threadId)}/posts`, {
-        method: "POST",
-        auth: true,
-        body: { content }
-      });
-      showFlash("Příspěvek přidán.", "ok");
-      renderThreadDetail(threadId); // refresh
+      await api(`/posts/${encodeURIComponent(postId)}/comments`, { method: "POST", auth: true, body: { body } });
+      showFlash("Komentář přidán.", "ok");
+      renderPostDetail(postId);
     } catch (e) {
       showFlash(e.message, "err");
     }
   });
+}
+
+// ---- Mutations (edit/delete) ----
+
+async function openEditPost(id, existingPost = null) {
+  if (!isAuthed()) return;
+
+  let post = existingPost;
+  try {
+    if (!post) {
+      const wrap = await api(`/posts/${encodeURIComponent(id)}`);
+      post = wrap?.data;
+    }
+  } catch (e) {
+    showFlash(e.message, "err");
+    return;
+  }
+
+  const title = prompt("Upravit nadpis:", String(post?.title ?? ""));
+  if (title == null) return;
+  const body = prompt("Upravit text:", String(post?.body ?? ""));
+  if (body == null) return;
+
+  try {
+    await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title: title.trim(), body: body.trim() } });
+    showFlash("Post upraven.", "ok");
+    // refresh current view
+    if ((location.hash || "").startsWith(`#/post/${id}`)) renderPostDetail(id);
+    else renderPosts();
+  } catch (e) {
+    showFlash(e.message, "err");
+  }
+}
+
+async function doDeletePost(id) {
+  if (!isAuthed()) return;
+  if (!confirm("Opravdu smazat post? (smažou se i komentáře)")) return;
+
+  try {
+    await api(`/posts/${encodeURIComponent(id)}`, { method: "DELETE", auth: true });
+    showFlash("Post smazán.", "ok");
+    location.hash = "#/";
+  } catch (e) {
+    showFlash(e.message, "err");
+  }
+}
+
+async function openEditComment(commentId) {
+  if (!isAuthed()) return;
+  const body = prompt("Upravit komentář:");
+  if (body == null) return;
+
+  try {
+    await api(`/comments/${encodeURIComponent(commentId)}`, { method: "PUT", auth: true, body: { body: body.trim() } });
+    showFlash("Komentář upraven.", "ok");
+    route(); // refresh current view
+  } catch (e) {
+    showFlash(e.message, "err");
+  }
+}
+
+async function doDeleteComment(commentId, postId) {
+  if (!isAuthed()) return;
+  if (!confirm("Opravdu smazat komentář?")) return;
+
+  try {
+    await api(`/comments/${encodeURIComponent(commentId)}`, { method: "DELETE", auth: true });
+    showFlash("Komentář smazán.", "ok");
+    renderPostDetail(postId);
+  } catch (e) {
+    showFlash(e.message, "err");
+  }
 }
 
 function renderNotFound() {
@@ -343,6 +529,19 @@ function renderNotFound() {
   `;
 }
 
-// Init
-renderAuthUI();
-route();
+// Init: pokud mám token, ověřím /auth/me (jinak token smažu)
+(async function init() {
+  renderAuthUI();
+
+  if (getToken()) {
+    try {
+      const me = await api("/auth/me", { auth: true });
+      setAuth({ token: getToken(), user: me });
+    } catch {
+      clearAuth();
+    }
+  }
+
+  renderAuthUI();
+  route();
+})();
