@@ -299,6 +299,61 @@ Tvoje role v projektu: kontrolovat požadavky vs. skutečný kód + spravovat do
 <a id="4-pro-fe-developera"></a>
 # 4. Pro FE developera
 
+## 4.0 UX filozofie – maximální jednoduchost (KLÍČOVÉ)
+
+Primární cíl projektu je **maximální zapojení uživatelů**.  
+Frontend musí být navržen tak, aby interakce byla co nejjednodušší a nejpřímější.
+
+---
+
+### 🔹 Registrace (nejdůležitější část)
+
+Registrace musí být:
+
+- jednokroková  
+- okamžitá  
+- bez zbytečných formulářů  
+- bez vícekrokového procesu  
+
+Uživatel zadá pouze **username** a ihned je registrován.  
+Backend vrátí vygenerované heslo – frontend ho musí:
+
+- jasně zobrazit  
+- upozornit, že se zobrazí pouze jednou  
+- doporučit jeho uložení  
+
+Nesmí vzniknout dojem, že je registrace složitá nebo administrativně náročná.
+
+Cíl: uživatel musí být schopný se zaregistrovat během několika sekund.
+
+---
+
+### 🔹 Přihlášení
+
+Přihlášení musí být snadno dostupné a rychlé.  
+Nemá působit složitě ani odrazujícím dojmem.
+
+---
+
+### 🔹 Interakce s obsahem
+
+Stránka musí podporovat okamžitou aktivitu:
+
+- možnost přidat příspěvek musí být vždy snadno dostupná  
+- možnost napsat komentář musí být „po ruce“ při čtení komentářů  
+- uživatel nesmí složitě hledat, kde může reagovat  
+
+Cílem je minimalizovat tření (friction).  
+Čím méně kroků mezi myšlenkou a akcí, tím lépe.
+
+---
+
+### 🔹 Hlavní princip
+
+Pokud je registrace nebo interakce složitá, uživatel odejde.  
+Jednoduchost je priorita nad vším ostatním.
+
+
 ## 4.1 Jak se autentizuje FE
 - FE drží **token** (např. v memory/store; localStorage jen pokud musíš)
 - chráněné requesty posílají:
