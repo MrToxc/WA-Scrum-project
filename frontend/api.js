@@ -1,7 +1,6 @@
-// api.js
-// Laravel backend routy jsou pod /api/v1 (viz README + routes/api.php)
+
 export const API_BASE = "http://127.0.0.1:8000/api/v1";
-// ↑ změň na váš backend URL, např. https://vase-domena.cz/api/v1
+
 
 export function getToken() {
   return localStorage.getItem("token");

@@ -7,6 +7,36 @@ const $authStatus = document.getElementById("authStatus");
 const $btnLogout = document.getElementById("btnLogout");
 const $btnLoginLink = document.getElementById("btnLoginLink");
 const $btnRegisterLink = document.getElementById("btnRegisterLink");
+const $btnTheme = document.getElementById("btnTheme");
+
+// -------- Theme (light/dark) --------
+function getPreferredTheme() {
+  const stored = localStorage.getItem("theme");
+  if (stored === "dark" || stored === "light") return stored;
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  return prefersDark ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+  const isDark = theme === "dark";
+  document.documentElement.classList.toggle("dark", isDark);
+  if ($btnTheme) {
+    $btnTheme.textContent = isDark ? "☀️" : "🌙";
+    $btnTheme.setAttribute("aria-label", isDark ? "Přepnout na světlý režim" : "Přepnout na tmavý režim");
+    $btnTheme.title = isDark ? "Světlý režim" : "Tmavý režim";
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.classList.contains("dark") ? "dark" : "light";
+  const next = current === "dark" ? "light" : "dark";
+  localStorage.setItem("theme", next);
+  applyTheme(next);
+}
+
+applyTheme(getPreferredTheme());
+
+$btnTheme?.addEventListener("click", toggleTheme);
 
 function isAuthed() {
   return !!getToken();
@@ -19,6 +49,17 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function avatarUrl(username) {
+  const u = String(username ?? "").trim();
+  return `https://avatars.laravel.cloud/${encodeURIComponent(u || "user")}`;
+}
+
+function avatarImg(username, size = 22) {
+  // avatars.laravel.cloud generuje SVG/PNG – držíme jednoduché <img>
+  const url = avatarUrl(username);
+  return `<img class="avatar" src="${escapeHtml(url)}" alt="" width="${size}" height="${size}" loading="lazy" referrerpolicy="no-referrer" />`;
 }
 
 function fmtDate(s) {
@@ -48,7 +89,9 @@ function renderAuthUI() {
   const authed = isAuthed();
   const user = getUsername();
 
-  $authStatus.textContent = authed ? `přihlášen jako ${user ?? "?"}` : "nepřihlášen";
+  $authStatus.innerHTML = authed
+    ? `<span class="authStatus">${avatarImg(user, 20)}<span>přihlášen jako <b>${escapeHtml(user ?? "?")}</b></span></span>`
+    : "nepřihlášen";
   $btnLogout.style.display = authed ? "inline-flex" : "none";
   $btnLoginLink.style.display = authed ? "none" : "inline-flex";
   $btnRegisterLink.style.display = authed ? "none" : "inline-flex";
@@ -144,7 +187,7 @@ async function renderPosts({ page = 1 } = {}) {
             <div class="card">
               <div class="thread__meta">
                 <span class="pill">#${escapeHtml(p.id)}</span>
-                <span class="pill">${escapeHtml(p?.user?.username ?? "")}</span>
+                <span class="pill pill--user">${avatarImg(p?.user?.username, 18)}${escapeHtml(p?.user?.username ?? "")}</span>
                 <span class="pill">${escapeHtml(fmtDate(p.created_at))}${edited ? " • Edited" : ""}</span>
                 <span class="pill">💬 ${escapeHtml(p.comments_count ?? 0)}</span>
               </div>
@@ -152,7 +195,7 @@ async function renderPosts({ page = 1 } = {}) {
               <h3 style="margin-top:10px">
                 <a href="#/post/${encodeURIComponent(p.id)}">${escapeHtml(p.title)}</a>
               </h3>
-              <p class="muted">${escapeHtml(String(p.body ?? "").slice(0, 160))}${String(p.body ?? "").length > 160 ? "…" : ""}</p>
+              <p class="muted content">${escapeHtml(String(p.body ?? "").slice(0, 160))}${String(p.body ?? "").length > 160 ? "…" : ""}</p>
 
               ${isMine ? `
                 <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
@@ -348,7 +391,7 @@ async function renderPostDetail(id) {
           <h1>${escapeHtml(post?.title ?? "")}</h1>
           <div class="thread__meta muted">
             <span class="pill">#${escapeHtml(post?.id ?? id)}</span>
-            <span class="pill">${escapeHtml(post?.user?.username ?? "")}</span>
+            <span class="pill pill--user">${avatarImg(post?.user?.username, 18)}${escapeHtml(post?.user?.username ?? "")}</span>
             <span class="pill">${escapeHtml(fmtDate(post?.created_at))}${editedPost ? " • Edited" : ""}</span>
             <span class="pill">💬 ${escapeHtml(post?.comments_count ?? comments.length)}</span>
           </div>
@@ -357,7 +400,7 @@ async function renderPostDetail(id) {
       </div>
 
       <div class="card">
-        <p style="white-space:pre-wrap">${escapeHtml(post?.body ?? "")}</p>
+        <p class="content" style="white-space:pre-wrap">${escapeHtml(post?.body ?? "")}</p>
         ${isMinePost ? `
           <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
             <button class="btn" id="btnEditPost">Upravit</button>
@@ -375,10 +418,10 @@ async function renderPostDetail(id) {
             <div class="card">
               <div class="thread__meta muted">
                 <span class="pill">#${escapeHtml(c.id)}</span>
-                <span class="pill">${escapeHtml(c?.user?.username ?? "")}</span>
+                <span class="pill pill--user">${avatarImg(c?.user?.username, 18)}${escapeHtml(c?.user?.username ?? "")}</span>
                 <span class="pill">${escapeHtml(fmtDate(c.created_at))}${edited ? " • Edited" : ""}</span>
               </div>
-              <p style="margin-top:10px; white-space:pre-wrap">${escapeHtml(c.body)}</p>
+              <p class="content" style="margin-top:10px; white-space:pre-wrap">${escapeHtml(c.body)}</p>
               ${isMine ? `
                 <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
                   <button class="btn" data-action="edit-comment" data-id="${escapeHtml(c.id)}">Upravit</button>
@@ -466,13 +509,13 @@ async function openEditPost(id, existingPost = null) {
     return;
   }
 
-  const title = prompt("Upravit nadpis:", String(post?.title ?? ""));
-  if (title == null) return;
+  // UX: umožnit upravit jen text bez nutnosti znovu zadávat nadpis.
+  // Nadpis zachováme tak, jak je na backendu.
   const body = prompt("Upravit text:", String(post?.body ?? ""));
   if (body == null) return;
 
   try {
-    await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title: title.trim(), body: body.trim() } });
+    await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title: String(post?.title ?? "").trim(), body: body.trim() } });
     showFlash("Post upraven.", "ok");
     // refresh current view
     if ((location.hash || "").startsWith(`#/post/${id}`)) renderPostDetail(id);
@@ -497,7 +540,14 @@ async function doDeletePost(id) {
 
 async function openEditComment(commentId) {
   if (!isAuthed()) return;
-  const body = prompt("Upravit komentář:");
+  // Prefill text (lepší na mobilu)
+  let current = "";
+  try {
+    const wrap = await api(`/comments/${encodeURIComponent(commentId)}`);
+    current = String(wrap?.data?.body ?? "");
+  } catch { /* ignore */ }
+
+  const body = prompt("Upravit komentář:", current);
   if (body == null) return;
 
   try {

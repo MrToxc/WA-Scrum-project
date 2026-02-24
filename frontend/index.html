@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Forum SPA</title>
   <link rel="stylesheet" href="./styles.css" />
+  <script>
+    // Apply theme before first paint (prevents "flash" on load)
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = (t === 'dark') || (!t && prefersDark);
+        if (isDark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -18,6 +29,7 @@
 
       <div class="auth">
         <span class="auth__status muted" id="authStatus">nepřihlášen</span>
+        <button class="btn" id="btnTheme" type="button" aria-label="Přepnout režim">🌙</button>
         <a class="btn" id="btnLoginLink" href="#/login">Login</a>
         <a class="btn" id="btnRegisterLink" href="#/register">Registrace</a>
         <button class="btn btn--danger" id="btnLogout" style="display:none">Logout</button>

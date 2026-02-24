@@ -4,7 +4,33 @@
   --muted: #64748b;
   --bg: #ffffff;
   --bg2: #f8fafc;
+  --input-bg: #ffffff;
+  --topbar-bg: rgba(255,255,255,0.9);
+  --shadow: rgba(15, 23, 42, 0.06);
+  --hover: #f1f5f9;
+  --nav-hover: #eef2ff;
+  --primary-border: #c7d2fe;
+  --primary-bg: #eef2ff;
   --danger: #dc2626;
+  --danger-border: #fecaca;
+  --danger-bg: #fff1f2;
+}
+
+html.dark {
+  --border: rgba(148, 163, 184, 0.25);
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --bg: #0b1220;
+  --bg2: #0f172a;
+  --input-bg: #0b1220;
+  --topbar-bg: rgba(15, 23, 42, 0.75);
+  --shadow: rgba(0, 0, 0, 0.35);
+  --hover: rgba(148, 163, 184, 0.12);
+  --nav-hover: rgba(99, 102, 241, 0.18);
+  --primary-border: rgba(99, 102, 241, 0.45);
+  --primary-bg: rgba(99, 102, 241, 0.18);
+  --danger-border: rgba(248, 113, 113, 0.35);
+  --danger-bg: rgba(248, 113, 113, 0.12);
 }
 
 * { box-sizing: border-box; }
@@ -19,7 +45,7 @@ body {
 
 .topbar {
   position: sticky; top: 0;
-  background: rgba(255,255,255,0.9);
+  background: var(--topbar-bg);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
@@ -28,7 +54,7 @@ body {
 .brand { font-weight: 800; text-decoration:none; color: var(--text); }
 .nav { display:flex; gap: 10px; }
 .nav__link { text-decoration:none; color: var(--text); padding: 8px 10px; border-radius: 10px; }
-.nav__link:hover { background: #eef2ff; }
+.nav__link:hover { background: var(--nav-hover); }
 
 .auth { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; justify-content:flex-end; }
 .muted { color: var(--muted); font-size: 13px; }
@@ -38,7 +64,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px;
-  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 6px 24px var(--shadow);
   margin: 12px 0;
 }
 
@@ -53,22 +79,26 @@ input, textarea {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: white;
+  background: var(--input-bg);
+  color: var(--text);
 }
 textarea { min-height: 120px; resize: vertical; }
 
 .btn {
   border: 1px solid var(--border);
-  background: white;
+  background: var(--input-bg);
   padding: 8px 12px;
   border-radius: 12px;
   text-decoration: none;
   color: var(--text);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.btn:hover { background: #f1f5f9; }
-.btn--primary { border-color: #c7d2fe; background: #eef2ff; }
-.btn--danger { border-color: #fecaca; background: #fff1f2; color: var(--danger); }
+.btn:hover { background: var(--hover); }
+.btn--primary { border-color: var(--primary-border); background: var(--primary-bg); }
+.btn--danger { border-color: var(--danger-border); background: var(--danger-bg); color: var(--danger); }
 
 .list { display: grid; gap: 12px; }
 .thread__meta { display:flex; gap: 10px; flex-wrap: wrap; align-items:center; }
@@ -80,9 +110,29 @@ textarea { min-height: 120px; resize: vertical; }
   color: var(--muted);
 }
 
+.pill--user {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.authStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .flash {
   border: 1px solid var(--border);
-  background: white;
+  background: var(--bg);
   padding: 10px 12px;
   border-radius: 14px;
   margin: 12px 0;
@@ -90,10 +140,54 @@ textarea { min-height: 120px; resize: vertical; }
 .flash--ok { border-color: #bbf7d0; background:#f0fdf4; }
 .flash--err { border-color: #fecaca; background:#fff1f2; }
 
+html.dark .flash--ok { border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.12); }
+html.dark .flash--err { border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.12); }
+
 
 
 .footer { padding-bottom: 40px; }
 a { color: inherit; }
+
+/* --- Text overflow fixes (long strings / urls) --- */
+.content,
+.card p,
+.card h1,
+.card h2,
+.card h3 {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* --- Mobile responsiveness --- */
+@media (max-width: 640px) {
+  .wrap { padding: 12px; }
+
+  .topbar__inner {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .nav {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .auth {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Make action buttons easier to tap */
+  .btn { padding: 10px 12px; border-radius: 14px; }
+
+  /* Avoid tiny side-by-side buttons */
+  .row { gap: 8px; }
+  .row .btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+  }
+}
 
 
 
