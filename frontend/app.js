@@ -70,6 +70,28 @@ function fmtDate(s) {
   return d.toLocaleString();
 }
 
+function timeAgo(s) {
+  if (!s) return "";
+  const d = new Date(s);
+  const t = d.getTime();
+  if (Number.isNaN(t)) return String(s);
+
+  const diffMs = Date.now() - t;
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+
+  if (diffSec < 10) return "právě teď";
+  if (diffSec < 60) return `před ${diffSec} s`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `před ${diffMin} min`;
+
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `před ${diffH} h`;
+
+  const diffD = Math.floor(diffH / 24);
+  return `před ${diffD} d`;
+}
+
 function isEdited(createdAt, updatedAt) {
   if (!createdAt || !updatedAt) return false;
   const c = new Date(createdAt).getTime();
@@ -188,7 +210,7 @@ async function renderPosts({ page = 1 } = {}) {
               <div class="thread__meta">
                 <span class="pill">#${escapeHtml(p.id)}</span>
                 <span class="pill pill--user">${avatarImg(p?.user?.username, 18)}${escapeHtml(p?.user?.username ?? "")}</span>
-                <span class="pill">${escapeHtml(fmtDate(p.created_at))}${edited ? " • Edited" : ""}</span>
+                <span class="pill" title="${escapeHtml(fmtDate(p.created_at))}">${escapeHtml(timeAgo(p.created_at))}${edited ? " • Edited" : ""}</span>
                 <span class="pill">💬 ${escapeHtml(p.comments_count ?? 0)}</span>
               </div>
 
@@ -392,7 +414,7 @@ async function renderPostDetail(id) {
           <div class="thread__meta muted">
             <span class="pill">#${escapeHtml(post?.id ?? id)}</span>
             <span class="pill pill--user">${avatarImg(post?.user?.username, 18)}${escapeHtml(post?.user?.username ?? "")}</span>
-            <span class="pill">${escapeHtml(fmtDate(post?.created_at))}${editedPost ? " • Edited" : ""}</span>
+            <span class="pill" title="${escapeHtml(fmtDate(post?.created_at))}">${escapeHtml(timeAgo(post?.created_at))}${editedPost ? " • Edited" : ""}</span>
             <span class="pill">💬 ${escapeHtml(post?.comments_count ?? comments.length)}</span>
           </div>
         </div>
@@ -419,7 +441,7 @@ async function renderPostDetail(id) {
               <div class="thread__meta muted">
                 <span class="pill">#${escapeHtml(c.id)}</span>
                 <span class="pill pill--user">${avatarImg(c?.user?.username, 18)}${escapeHtml(c?.user?.username ?? "")}</span>
-                <span class="pill">${escapeHtml(fmtDate(c.created_at))}${edited ? " • Edited" : ""}</span>
+                <span class="pill" title="${escapeHtml(fmtDate(c.created_at))}">${escapeHtml(timeAgo(c.created_at))}${edited ? " • Edited" : ""}</span>
               </div>
               <p class="content" style="margin-top:10px; white-space:pre-wrap">${escapeHtml(c.body)}</p>
               ${isMine ? `
@@ -509,13 +531,17 @@ async function openEditPost(id, existingPost = null) {
     return;
   }
 
-  // UX: umožnit upravit jen text bez nutnosti znovu zadávat nadpis.
-  // Nadpis zachováme tak, jak je na backendu.
+  // Nadpis je volitelný. Default je aktuální hodnotа, takže uživatel nemusí nic přepisovat.
+  const titleInput = prompt("Upravit nadpis (OK = ponechat / upravit):", String(post?.title ?? ""));
+  if (titleInput == null) return;
+
   const body = prompt("Upravit text:", String(post?.body ?? ""));
   if (body == null) return;
 
+  const title = String(titleInput ?? "").trim() || String(post?.title ?? "").trim();
+
   try {
-    await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title: String(post?.title ?? "").trim(), body: body.trim() } });
+    await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title, body: body.trim() } });
     showFlash("Post upraven.", "ok");
     // refresh current view
     if ((location.hash || "").startsWith(`#/post/${id}`)) renderPostDetail(id);
