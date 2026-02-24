@@ -160,7 +160,7 @@ async function renderPosts({ page = 1 } = {}) {
         <h1>Posty</h1>
         <div class="muted">Veřejné čtení • pro psaní je potřeba token</div>
       </div>
-      <a class="btn btn--primary auth-only" href="#/new-post" style="display:none">Nový post</a>
+
     </div>
     <div class="card muted">Načítám…</div>
   `;
@@ -198,7 +198,7 @@ async function renderPosts({ page = 1 } = {}) {
           <h1>Posty</h1>
           <div class="muted">Veřejné čtení • pro psaní je potřeba token</div>
         </div>
-        <a class="btn btn--primary auth-only" href="#/new-post" style="display:none">Nový post</a>
+  
       </div>
 
       <div class="list">
