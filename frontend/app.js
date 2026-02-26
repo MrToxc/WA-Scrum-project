@@ -107,6 +107,66 @@ function showFlash(message, type = "ok") {
   window.setTimeout(() => ($flash.style.display = "none"), 3200);
 }
 
+// -------- Modal (for edit dialogs) --------
+function openModal({ title = "", contentHtml = "", onSubmit = null, submitText = "Uložit" } = {}) {
+  // Close existing modal if any
+  document.getElementById("modalBackdrop")?.remove();
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "modalBackdrop";
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+      <div class="modal__header">
+        <div class="modal__title">${escapeHtml(title)}</div>
+      </div>
+      <div class="modal__body">${contentHtml}</div>
+      <div class="modal__footer">
+        <button class="btn" type="button" data-modal-cancel>Zrušit</button>
+        <button class="btn btn--primary" type="submit" form="modalForm">${escapeHtml(submitText)}</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+
+  const modal = backdrop.querySelector(".modal");
+  const cancelBtn = backdrop.querySelector("[data-modal-cancel]");
+
+  function close() {
+    document.removeEventListener("keydown", onKey);
+    backdrop.remove();
+  }
+
+  function onKey(e) {
+    if (e.key === "Escape") close();
+  }
+
+  document.addEventListener("keydown", onKey);
+
+  // click outside closes
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) close();
+  });
+  cancelBtn.addEventListener("click", close);
+
+  const form = backdrop.querySelector("#modalForm");
+  if (form && typeof onSubmit === "function") {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const ok = await onSubmit(new FormData(form), close);
+      if (ok) close();
+    });
+  }
+
+  // focus first input/textarea
+  window.setTimeout(() => {
+    modal.querySelector("input, textarea, button")?.focus();
+  }, 0);
+
+  return { close };
+}
+
 function renderAuthUI() {
   const authed = isAuthed();
   const user = getUsername();
@@ -318,21 +378,13 @@ function renderRegister() {
             <div style="font-size:18px; font-weight:700; margin-top:6px; word-break:break-all;">${escapeHtml(data.password)}</div>
           </div>
           <div class="row" style="gap:8px; margin-top:12px; flex-wrap:wrap;">
-            <button class="btn" id="btnCopyPass">Kopírovat</button>
             <a class="btn btn--primary" href="#/">Pokračovat na posty</a>
             <a class="btn" href="#/login">Přejít na login</a>
           </div>
         </div>
       `;
 
-      document.getElementById("btnCopyPass").addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(String(data.password));
-          showFlash("Zkopírováno do schránky.", "ok");
-        } catch {
-          showFlash("Kopírování se nepovedlo (prohlížeč nepovolil). Označ a zkopíruj ručně.", "err");
-        }
-      });
+      // Pozn.: záměrně bez tlačítka "Kopírovat" – uživatel si heslo označí a uloží ručně.
 
       // doplníme user_id přes /auth/me (pokud token už funguje)
       try {
@@ -531,24 +583,46 @@ async function openEditPost(id, existingPost = null) {
     return;
   }
 
-  // Nadpis je volitelný. Default je aktuální hodnotа, takže uživatel nemusí nic přepisovat.
-  const titleInput = prompt("Upravit nadpis (OK = ponechat / upravit):", String(post?.title ?? ""));
-  if (titleInput == null) return;
+  const currentTitle = String(post?.title ?? "");
+  const currentBody = String(post?.body ?? "");
 
-  const body = prompt("Upravit text:", String(post?.body ?? ""));
-  if (body == null) return;
+  const contentHtml = `
+    <form id="modalForm" class="modal-form">
+      <label class="muted">Nadpis <span class="muted" style="font-weight:400;">(volitelné)</span></label>
+      <input name="title" type="text" maxlength="255" value="${escapeHtml(currentTitle)}" />
+      <div style="height:10px"></div>
+      <label class="muted">Text</label>
+      <textarea name="body" required minlength="1" maxlength="8191">${escapeHtml(currentBody)}</textarea>
+    </form>
+  `;
 
-  const title = String(titleInput ?? "").trim() || String(post?.title ?? "").trim();
+  openModal({
+    title: "Upravit post",
+    contentHtml,
+    submitText: "Uložit",
+    onSubmit: async (fd) => {
+      const titleRaw = String(fd.get("title") ?? "").trim();
+      const bodyRaw = String(fd.get("body") ?? "").trim();
+      const title = titleRaw || currentTitle.trim();
 
-  try {
-    await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title, body: body.trim() } });
-    showFlash("Post upraven.", "ok");
-    // refresh current view
-    if ((location.hash || "").startsWith(`#/post/${id}`)) renderPostDetail(id);
-    else renderPosts();
-  } catch (e) {
-    showFlash(e.message, "err");
-  }
+      if (!bodyRaw) {
+        showFlash("Text nesmí být prázdný.", "err");
+        return false;
+      }
+
+      try {
+        await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title, body: bodyRaw } });
+        showFlash("Post upraven.", "ok");
+        // refresh current view
+        if ((location.hash || "").startsWith(`#/post/${id}`)) renderPostDetail(id);
+        else renderPosts();
+        return true;
+      } catch (e) {
+        showFlash(e.message, "err");
+        return false;
+      }
+    }
+  });
 }
 
 async function doDeletePost(id) {

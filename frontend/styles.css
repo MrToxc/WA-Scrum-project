@@ -189,5 +189,56 @@ a { color: inherit; }
   }
 }
 
+/* --- Modal (edit dialogs) --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 9999;
+}
+
+.modal {
+  width: min(640px, 100%);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px var(--shadow);
+  overflow: hidden;
+}
+
+.modal__header {
+  padding: 14px 14px 0 14px;
+}
+
+.modal__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.modal__body {
+  padding: 12px 14px 8px 14px;
+}
+
+.modal__footer {
+  padding: 12px 14px 14px 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-form textarea { min-height: 160px; }
+
+@media (max-width: 640px) {
+  .modal-backdrop { padding: 12px; align-items: flex-end; }
+  .modal { border-radius: 18px 18px 0 0; width: 100%; }
+}
+
 
 
