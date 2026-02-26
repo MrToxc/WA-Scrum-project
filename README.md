@@ -525,7 +525,8 @@ Scrum master eviduje práci, hlídá plán a tabulky.
 - VPS: bezpečnost `.env`, DB hesla, HTTPS.
 
 ---
-
+###TO-DO
+sysadmin všechny práva
 <a id="quickstart-pro-lokalni-vyvoj"></a>
 ## Quickstart pro lokální vývoj (pro kohokoliv)
 
