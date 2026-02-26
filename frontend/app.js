@@ -218,7 +218,7 @@ async function renderPosts({ page = 1 } = {}) {
     <div class="row" style="justify-content:space-between; align-items:flex-end;">
       <div>
         <h1>Posty</h1>
-        <div class="muted">Veřejné čtení • pro psaní je potřeba token</div>
+        <div class="muted">Veřejné čtení • Všechny hanlivé nebo příspěvky, které porušují zákon, budou potrestány</div>
       </div>
 
     </div>
@@ -256,7 +256,7 @@ async function renderPosts({ page = 1 } = {}) {
       <div class="row" style="justify-content:space-between; align-items:flex-end;">
         <div>
           <h1>Posty</h1>
-          <div class="muted">Veřejné čtení • pro psaní je potřeba token</div>
+          <div class="muted">Veřejné čtení • Všechny hanlivé nebo příspěvky, které porušují zákon, budou potrestány</div>
         </div>
   
       </div>
@@ -384,7 +384,7 @@ function renderRegister() {
         </div>
       `;
 
-      // Pozn.: záměrně bez tlačítka "Kopírovat" – uživatel si heslo označí a uloží ručně.
+      
 
       // doplníme user_id přes /auth/me (pokud token už funguje)
       try {
@@ -435,7 +435,7 @@ function renderNewPost() {
       const created = await api("/posts", { method: "POST", auth: true, body: { title, body } });
       const id = created?.data?.id;
       location.hash = id ? `#/post/${encodeURIComponent(id)}` : "#/";
-      showFlash("Post vytvořen.", "ok");
+      showFlash("Příspěvek vytvořen.", "ok");
     } catch (e) {
       showFlash(e.message, "err");
     }
@@ -517,7 +517,7 @@ async function renderPostDetail(id) {
     }
 
     $app.querySelectorAll("[data-action='edit-comment']").forEach(btn => {
-      btn.addEventListener("click", () => openEditComment(btn.getAttribute("data-id")));
+      btn.addEventListener("click", () => openEditComment(btn.getAttribute("data-id"), id));
     });
     $app.querySelectorAll("[data-action='delete-comment']").forEach(btn => {
       btn.addEventListener("click", () => doDeleteComment(btn.getAttribute("data-id"), id));
@@ -597,7 +597,7 @@ async function openEditPost(id, existingPost = null) {
   `;
 
   openModal({
-    title: "Upravit post",
+    title: "Upravit příspěvek",
     contentHtml,
     submitText: "Uložit",
     onSubmit: async (fd) => {
@@ -612,7 +612,7 @@ async function openEditPost(id, existingPost = null) {
 
       try {
         await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title, body: bodyRaw } });
-        showFlash("Post upraven.", "ok");
+        showFlash("Příspěvek upraven.", "ok");
         // refresh current view
         if ((location.hash || "").startsWith(`#/post/${id}`)) renderPostDetail(id);
         else renderPosts();
@@ -627,36 +627,57 @@ async function openEditPost(id, existingPost = null) {
 
 async function doDeletePost(id) {
   if (!isAuthed()) return;
-  if (!confirm("Opravdu smazat post? (smažou se i komentáře)")) return;
+  if (!confirm("Opravdu smazat příspěvek? (smažou se i komentáře)")) return;
 
   try {
     await api(`/posts/${encodeURIComponent(id)}`, { method: "DELETE", auth: true });
-    showFlash("Post smazán.", "ok");
+    showFlash("Příspěvek smazán.", "ok");
     location.hash = "#/";
   } catch (e) {
     showFlash(e.message, "err");
   }
 }
 
-async function openEditComment(commentId) {
+async function openEditComment(commentId, postId = null) {
   if (!isAuthed()) return;
-  // Prefill text (lepší na mobilu)
+
+  // Prefill text
   let current = "";
   try {
     const wrap = await api(`/comments/${encodeURIComponent(commentId)}`);
     current = String(wrap?.data?.body ?? "");
   } catch { /* ignore */ }
 
-  const body = prompt("Upravit komentář:", current);
-  if (body == null) return;
+  const contentHtml = `
+    <form id="modalForm" class="modal-form">
+      <label class="muted">Text</label>
+      <textarea name="body" required minlength="1" maxlength="8191">${escapeHtml(current)}</textarea>
+    </form>
+  `;
 
-  try {
-    await api(`/comments/${encodeURIComponent(commentId)}`, { method: "PUT", auth: true, body: { body: body.trim() } });
-    showFlash("Komentář upraven.", "ok");
-    route(); // refresh current view
-  } catch (e) {
-    showFlash(e.message, "err");
-  }
+  openModal({
+    title: "Upravit komentář",
+    contentHtml,
+    submitText: "Uložit",
+    onSubmit: async (fd) => {
+      const bodyRaw = String(fd.get("body") ?? "").trim();
+      if (!bodyRaw) {
+        showFlash("Text nesmí být prázdný.", "err");
+        return false;
+      }
+
+      try {
+        await api(`/comments/${encodeURIComponent(commentId)}`, { method: "PUT", auth: true, body: { body: bodyRaw } });
+        showFlash("Komentář upraven.", "ok");
+        if (postId) renderPostDetail(postId);
+        else route();
+        return true;
+      } catch (e) {
+        showFlash(e.message, "err");
+        return false;
+      }
+    },
+  });
 }
 
 async function doDeleteComment(commentId, postId) {
