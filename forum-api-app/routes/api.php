@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\PostController;
+use App\Http\Controllers\ReactionController;
 use Illuminate\Support\Facades\Route;
 
 //Route::get('/user', function (Request $request) {
@@ -25,12 +26,12 @@ Route::prefix('v1')->group(function () {
     */
     Route::prefix('auth')->group(function () {
         Route::post('/register', [AuthController::class, 'register']); // POST /api/v1/auth/register
-        Route::post('/login',    [AuthController::class, 'login']);    // POST /api/v1/auth/login
+        Route::post('/login', [AuthController::class, 'login']);    // POST /api/v1/auth/login
 
         // chráněné (token musí být poslaný)
         Route::middleware('auth:sanctum')->group(function () {
             Route::post('/logout', [AuthController::class, 'logout']); // POST /api/v1/auth/logout
-            Route::get('/me',      [AuthController::class, 'me']);     // GET  /api/v1/auth/me
+            Route::get('/me', [AuthController::class, 'me']);     // GET  /api/v1/auth/me
         });
     });
 
@@ -41,13 +42,13 @@ Route::prefix('v1')->group(function () {
     */
 
     // veřejné čtení
-    Route::get('/posts',        [PostController::class, 'index']);
+    Route::get('/posts', [PostController::class, 'index']);
     Route::get('/posts/{post}', [PostController::class, 'show']);
 
     // doporučeně chránit zápis (pokud chceš veřejný zápis, middleware smaž)
     Route::middleware('auth:sanctum')->group(function () {
-        Route::post('/posts',        [PostController::class, 'store']);
-        Route::put('/posts/{post}',  [PostController::class, 'update']);
+        Route::post('/posts', [PostController::class, 'store']);
+        Route::put('/posts/{post}', [PostController::class, 'update']);
         Route::delete('/posts/{post}', [PostController::class, 'destroy']);
     });
 
@@ -63,8 +64,19 @@ Route::prefix('v1')->group(function () {
     // doporučeně chránit zápis/edit/smazání
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/posts/{post}/comments', [CommentController::class, 'store']);
-        Route::put('/comments/{comment}',     [CommentController::class, 'update']);
-        Route::delete('/comments/{comment}',  [CommentController::class, 'destroy']);
+        Route::put('/comments/{comment}', [CommentController::class, 'update']);
+        Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | REACTIONS
+    |----------------------------------------------------------------------
+    */
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/posts/{post}/reactions', [ReactionController::class, 'storeForPost']);       // POST /api/v1/posts/{id}/reactions
+        Route::post('/comments/{comment}/reactions', [ReactionController::class, 'storeForComment']); // POST /api/v1/comments/{id}/reactions
     });
 
 });

@@ -1,59 +1,571 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Forum API – Full Endpoint Documentation
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Base URL: `http://localhost:8000/api/v1`
 
-## About Laravel
+All requests should include `Accept: application/json` header.
+Authenticated endpoints require `Authorization: Bearer <TOKEN>` header.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 1. Authentication
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### How auth works
 
-## Learning Laravel
+- Registration only requires a `username`. The server **generates** a strong password and returns it **once** — this is the only time the user sees the plaintext password.
+- Login uses **only the password** (no username needed). The system finds the user by a hashed lookup of the password.
+- Login invalidates all previous tokens — only **1 active token** at a time.
+- Tokens are Laravel Sanctum bearer tokens. Send them via `Authorization: Bearer <TOKEN>` header.
+- If a token is invalid or missing on a protected route, the API returns `401 Unauthorized`.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+---
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### POST /auth/register
 
-## Laravel Sponsors
+Creates a new user account with an auto-generated password.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+**Body:**
+```json
+{ "username": "tester1" }
+```
 
-### Premium Partners
+**Validation rules:**
+- `username`: required, string, min 3, max 50, alpha_dash (letters, numbers, dashes, underscores), must be unique
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+**201 Response:**
+```json
+{
+  "username": "tester1",
+  "password": "aB3$kL9mNp2xQr7wYz",
+  "token": "1|abc123def456..."
+}
+```
 
-## Contributing
+**Errors:**
+- `422` — username is invalid, too short/long, or already taken
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+---
 
-## Code of Conduct
+### POST /auth/login
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Logs in using **only the password**. Deletes all previous tokens (only 1 active session).
 
-## Security Vulnerabilities
+**Body:**
+```json
+{ "password": "aB3$kL9mNp2xQr7wYz" }
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+**200 Response:**
+```json
+{
+  "token": "2|xyz789ghi012...",
+  "user": {
+    "id": 1,
+    "username": "tester1"
+  }
+}
+```
 
-## License
+**Errors:**
+- `422` — invalid password (no matching user found)
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+
+### POST /auth/logout ⟵ auth required
+
+Deletes all tokens for the authenticated user (logs out everywhere).
+
+**Header:** `Authorization: Bearer <TOKEN>`
+
+**200 Response:**
+```json
+{ "message": "Logged out." }
+```
+
+---
+
+### GET /auth/me ⟵ auth required
+
+Returns the currently authenticated user's info.
+
+**Header:** `Authorization: Bearer <TOKEN>`
+
+**200 Response:**
+```json
+{
+  "id": 1,
+  "username": "tester1"
+}
+```
+
+**Errors:**
+- `401` — token is missing or invalid
+
+---
+
+## 2. Posts
+
+Reading is public. Creating, updating, and deleting require authentication.
+
+Every post response includes:
+- `user` object (author info: `id`, `username`)
+- `comments_count` (integer)
+- `upvotes_count` (integer) — total upvotes from all users
+- `downvotes_count` (integer) — total downvotes from all users
+- `user_reaction` (string|null) — the authenticated user's reaction: `"upvote"`, `"downvote"`, or `null` if not reacted. Always `null` when not authenticated.
+
+---
+
+### GET /posts
+
+Returns a paginated list of all posts, newest first.
+
+**Query params:**
+- `per_page` (optional, default: 10, min: 10, max: 50)
+
+**200 Response:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "title": "My first post",
+      "body": "Hello world!",
+      "created_at": "2026-03-02T20:00:00.000000Z",
+      "updated_at": "2026-03-02T20:00:00.000000Z",
+      "user": { "id": 1, "username": "tester1" },
+      "comments_count": 3,
+      "upvotes_count": 5,
+      "downvotes_count": 1,
+      "user_reaction": "upvote"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "last_page": 1,
+    "per_page": 10,
+    "total": 1
+  }
+}
+```
+
+**Note:** If the request includes a valid `Authorization: Bearer <TOKEN>` header, `user_reaction` will show the authenticated user's reaction. If no token is sent, `user_reaction` is always `null`. The endpoint works both ways — no auth required, but auth enhances the response.
+
+---
+
+### GET /posts/{post}
+
+Returns a single post by ID.
+
+**200 Response:**
+```json
+{
+  "data": {
+    "id": 1,
+    "user_id": 1,
+    "title": "My first post",
+    "body": "Hello world!",
+    "created_at": "2026-03-02T20:00:00.000000Z",
+    "updated_at": "2026-03-02T20:00:00.000000Z",
+    "user": { "id": 1, "username": "tester1" },
+    "comments_count": 3,
+    "upvotes_count": 5,
+    "downvotes_count": 1,
+    "user_reaction": "upvote"
+  }
+}
+```
+
+**Errors:**
+- `404` — post does not exist
+
+**Note:** Same `user_reaction` behavior as GET /posts — works with or without auth token.
+
+---
+
+### POST /posts ⟵ auth required
+
+Creates a new post. The authenticated user becomes the author.
+
+**Body:**
+```json
+{
+  "title": "My first post",
+  "body": "This is the post content..."
+}
+```
+
+**Validation rules:**
+- `title`: required, string, min 5, max 255
+- `body`: required, string, min 5, max 8191
+
+**201 Response:**
+```json
+{
+  "data": {
+    "id": 1,
+    "user_id": 1,
+    "title": "My first post",
+    "body": "This is the post content...",
+    "created_at": "2026-03-02T20:00:00.000000Z",
+    "updated_at": "2026-03-02T20:00:00.000000Z",
+    "user": { "id": 1, "username": "tester1" },
+    "comments_count": 0,
+    "upvotes_count": 0,
+    "downvotes_count": 0,
+    "user_reaction": null
+  }
+}
+```
+
+**Errors:**
+- `401` — not authenticated
+- `422` — validation failed (title/body too short, too long, or missing)
+
+---
+
+### PUT /posts/{post} ⟵ auth required, author only
+
+Updates an existing post. Only the original author can edit.
+
+**Body:**
+```json
+{
+  "title": "Updated title",
+  "body": "Updated body content..."
+}
+```
+
+**Validation rules:** same as POST /posts
+
+**200 Response:** same structure as POST /posts response, with updated data and current reaction counts/user_reaction.
+
+**Errors:**
+- `401` — not authenticated
+- `403` — authenticated but not the author of this post
+- `404` — post does not exist
+- `422` — validation failed
+
+---
+
+### DELETE /posts/{post} ⟵ auth required, author only
+
+Deletes a post. Only the original author can delete.
+
+**204 No Content** — empty response body on success.
+
+**Cascade behavior:**
+- All comments under this post are automatically deleted (DB cascade).
+- All reactions on this post are automatically deleted (model event).
+- All reactions on the deleted comments are also automatically deleted (model event).
+
+**Errors:**
+- `401` — not authenticated
+- `403` — authenticated but not the author
+
+---
+
+## 3. Comments
+
+Reading is public. Creating, updating, and deleting require authentication.
+
+Every comment response includes:
+- `user` object (author info: `id`, `username`)
+- `upvotes_count` (integer)
+- `downvotes_count` (integer)
+- `user_reaction` (string|null) — same behavior as posts
+
+---
+
+### GET /posts/{post}/comments
+
+Returns all comments for a specific post, newest first. Not paginated — returns all comments at once.
+
+**200 Response:**
+```json
+{
+  "data": [
+    {
+      "id": 10,
+      "post_id": 1,
+      "user_id": 2,
+      "body": "Great post!",
+      "created_at": "2026-03-02T21:00:00.000000Z",
+      "updated_at": "2026-03-02T21:00:00.000000Z",
+      "user": { "id": 2, "username": "tester2" },
+      "upvotes_count": 4,
+      "downvotes_count": 0,
+      "user_reaction": "upvote"
+    }
+  ]
+}
+```
+
+**Errors:**
+- `404` — post does not exist
+
+**Note:** Same `user_reaction` behavior — works with or without auth token.
+
+---
+
+### POST /posts/{post}/comments ⟵ auth required
+
+Creates a comment on a specific post. The authenticated user becomes the author.
+
+**Body:**
+```json
+{ "body": "This is my comment" }
+```
+
+**Validation rules:**
+- `body`: required, string, min 2, max 2000
+
+**201 Response:**
+```json
+{
+  "data": {
+    "id": 10,
+    "post_id": 1,
+    "user_id": 2,
+    "body": "This is my comment",
+    "created_at": "2026-03-02T21:00:00.000000Z",
+    "updated_at": "2026-03-02T21:00:00.000000Z",
+    "user": { "id": 2, "username": "tester2" },
+    "upvotes_count": 0,
+    "downvotes_count": 0,
+    "user_reaction": null
+  }
+}
+```
+
+**Errors:**
+- `401` — not authenticated
+- `404` — post does not exist
+- `422` — validation failed
+
+---
+
+### PUT /comments/{comment} ⟵ auth required, author only
+
+Updates an existing comment. Only the original author can edit.
+
+**Body:**
+```json
+{ "body": "Updated comment text" }
+```
+
+**Validation rules:** same as POST comment
+
+**200 Response:** same structure as POST comment response, with updated data and current reaction counts/user_reaction.
+
+**Errors:**
+- `401` — not authenticated
+- `403` — authenticated but not the author of this comment
+- `404` — comment does not exist
+- `422` — validation failed
+
+---
+
+### DELETE /comments/{comment} ⟵ auth required, author only
+
+Deletes a comment. Only the original author can delete.
+
+**204 No Content** — empty response body on success.
+
+**Cascade behavior:**
+- All reactions on this comment are automatically deleted (model event).
+
+**Errors:**
+- `401` — not authenticated
+- `403` — authenticated but not the author
+
+---
+
+## 4. Reactions (Upvote / Downvote)
+
+Reactions are a **polymorphic** system — the same reaction mechanism works for both posts and comments. A user can have at most **one reaction per entity** (enforced by unique constraint on `user_id + reactable_id + reactable_type`).
+
+All reaction endpoints require authentication.
+
+### How reactions work — toggle behavior
+
+The POST endpoint uses **toggle logic**:
+
+1. **No existing reaction** → creates a new reaction → returns `201`
+2. **Same type already exists** (e.g., you upvote something you already upvoted) → **removes** the reaction (un-react) → returns `200` with `"data": null`
+3. **Opposite type exists** (e.g., you upvote something you downvoted) → **switches** the reaction → returns `200` with updated reaction data
+
+This means the frontend only needs **one button action per type**. Example:
+- User clicks upvote → POST with `"type": "upvote"` → reaction created
+- User clicks upvote again → POST with `"type": "upvote"` → reaction removed (toggle off)
+- User clicks downvote → POST with `"type": "downvote"` → reaction created
+- User clicks upvote → POST with `"type": "upvote"` → reaction switches from downvote to upvote
+
+### How to display reactions on the frontend
+
+Every post and comment response already includes these fields:
+- `upvotes_count` — total number of upvotes from all users
+- `downvotes_count` — total number of downvotes from all users
+- `user_reaction` — the logged-in user's own reaction: `"upvote"`, `"downvote"`, or `null`
+
+**You do NOT need a separate GET request to fetch reactions.** They are embedded directly in post and comment responses. Just read `user_reaction` from the post/comment object to know the current user's state.
+
+**Frontend rendering logic:**
+- If `user_reaction === "upvote"` → highlight the upvote button
+- If `user_reaction === "downvote"` → highlight the downvote button
+- If `user_reaction === null` → no button highlighted (user hasn't reacted)
+- Display `upvotes_count` and `downvotes_count` next to the buttons
+
+**After a reaction POST, re-fetch the post/comment** (or the post list / comment list) to get the updated counts and `user_reaction`. Alternatively, update the UI optimistically:
+- If response message is `"Reaction created."` → increment the count for that type, set `user_reaction`
+- If response message is `"Reaction removed."` → decrement the count, set `user_reaction` to `null`
+- If response message is `"Reaction updated."` → decrement old type count, increment new type count, update `user_reaction`
+
+---
+
+### POST /posts/{post}/reactions ⟵ auth required
+
+Toggle a reaction on a post.
+
+**Body:**
+```json
+{ "type": "upvote" }
+```
+
+**Validation rules:**
+- `type`: required, string, must be exactly `"upvote"` or `"downvote"`
+
+**201 Response (reaction created):**
+```json
+{
+  "message": "Reaction created.",
+  "data": {
+    "id": 1,
+    "user_id": 1,
+    "reactable_id": 1,
+    "reactable_type": "Post",
+    "type": "upvote",
+    "created_at": "2026-03-02T22:00:00.000000Z",
+    "updated_at": "2026-03-02T22:00:00.000000Z"
+  }
+}
+```
+
+**200 Response (reaction removed — toggled off):**
+```json
+{
+  "message": "Reaction removed.",
+  "data": null
+}
+```
+
+**200 Response (reaction switched — e.g. downvote → upvote):**
+```json
+{
+  "message": "Reaction updated.",
+  "data": {
+    "id": 1,
+    "user_id": 1,
+    "reactable_id": 1,
+    "reactable_type": "Post",
+    "type": "upvote",
+    "created_at": "2026-03-02T22:00:00.000000Z",
+    "updated_at": "2026-03-02T22:05:00.000000Z"
+  }
+}
+```
+
+**Errors:**
+- `401` — not authenticated
+- `404` — post does not exist
+- `422` — invalid type (not "upvote" or "downvote")
+
+---
+
+### POST /comments/{comment}/reactions ⟵ auth required
+
+Toggle a reaction on a comment. Exact same behavior and responses as POST /posts/{post}/reactions, but `reactable_type` will be `"Comment"`.
+
+**Body:**
+```json
+{ "type": "downvote" }
+```
+
+**Responses:** identical structure to post reactions (201/200 with same message patterns).
+
+**Errors:**
+- `401` — not authenticated
+- `404` — comment does not exist
+- `422` — invalid type
+
+---
+
+## 5. Cascade Delete Summary
+
+When entities are deleted, related data is automatically cleaned up:
+
+| Deleted entity | What gets cascade-deleted |
+|---|---|
+| **User** | All their posts → all comments on those posts → all reactions on those posts and comments. Also all their comments, and all their reactions. |
+| **Post** | All comments on the post (DB cascade). All reactions on the post (model event). All reactions on the deleted comments (model event). |
+| **Comment** | All reactions on the comment (model event). |
+
+---
+
+## 6. Common Error Responses
+
+### 401 Unauthorized
+```json
+{ "message": "Unauthenticated." }
+```
+Token is missing, expired, or invalid.
+
+### 403 Forbidden
+```json
+{ "message": "Forbidden" }
+```
+Authenticated but not allowed (e.g., trying to edit/delete someone else's post/comment/reaction).
+
+### 404 Not Found
+```json
+{ "message": "Not Found" }
+```
+The requested resource (post, comment, reaction) does not exist. This is returned automatically by Laravel's route model binding — if the ID in the URL doesn't match any record, you get 404 before the controller code even runs.
+
+### 422 Unprocessable Entity
+```json
+{
+  "message": "The title field is required.",
+  "errors": {
+    "title": ["The title field is required."],
+    "body": ["The body field must be at least 5 characters."]
+  }
+}
+```
+Validation failed. The `errors` object contains field-specific error messages.
+
+---
+
+## 7. Full Route Table
+
+| Method | URI | Auth | Description |
+|--------|-----|:----:|-------------|
+| POST | /auth/register | ✗ | Register new user |
+| POST | /auth/login | ✗ | Login with password |
+| POST | /auth/logout | ✓ | Logout (delete all tokens) |
+| GET | /auth/me | ✓ | Get current user info |
+| GET | /posts | ✗ | List posts (paginated) |
+| GET | /posts/{post} | ✗ | Get single post |
+| POST | /posts | ✓ | Create post |
+| PUT | /posts/{post} | ✓ | Update post (author only) |
+| DELETE | /posts/{post} | ✓ | Delete post (author only) |
+| GET | /posts/{post}/comments | ✗ | List comments for post |
+| POST | /posts/{post}/comments | ✓ | Create comment on post |
+| PUT | /comments/{comment} | ✓ | Update comment (author only) |
+| DELETE | /comments/{comment} | ✓ | Delete comment (author only) |
+| POST | /posts/{post}/reactions | ✓ | Toggle reaction on post |
+| POST | /comments/{comment}/reactions | ✓ | Toggle reaction on comment |
+
+**Auth column:** ✗ = public (no token needed, but sending a token enhances response with `user_reaction`). ✓ = token required, returns 401 without it.
+
+**Note:** There is no separate DELETE endpoint for reactions. To remove a reaction, simply POST the same type again (toggle off).

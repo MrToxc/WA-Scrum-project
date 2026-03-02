@@ -10,14 +10,38 @@ class CommentController extends Controller
 {
     /**
      * Display a listing of the resource.
+     * CHATGPT code start
      */
     public function index(Post $post, Request $request)
     {
-        $comments = $post->comments()
+        $query = $post->comments()
             ->with(['user:id,username'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->withCount([
+                'reactions as upvotes_count' => fn($q) => $q->where('type', 'upvote'),
+                'reactions as downvotes_count' => fn($q) => $q->where('type', 'downvote'),
+            ])
+            ->orderBy('created_at', 'desc');
 
+        // if authenticated, eager-load only this user's reaction
+        if ($user = $request->user()) {
+            $query->with([
+                'reactions' => fn($q) =>
+                    $q->where('user_id', $user->id)
+                        ->select('id', 'reactable_id', 'reactable_type', 'type')
+            ]);
+        }
+
+        $comments = $query->get();
+
+        // map user_reaction onto each comment
+        $comments->transform(function ($comment) use ($request) {
+            $comment->user_reaction = $request->user()
+                ? ($comment->reactions->first()?->type)
+                : null;
+            unset($comment->reactions);
+            return $comment;
+        });
+        // CHATGPT code end
         return response()->json(['data' => $comments]);
     }
 
@@ -38,6 +62,13 @@ class CommentController extends Controller
         $comment->save();
 
         $comment->load('user:id,username');
+        // CHATGPT code start
+        $comment->loadCount([
+            'reactions as upvotes_count' => fn($q) => $q->where('type', 'upvote'),
+            'reactions as downvotes_count' => fn($q) => $q->where('type', 'downvote'),
+        ]);
+        $comment->user_reaction = null; // new comment, no reactions yet
+        // CHATGPT code end
 
         return response()->json(['data' => $comment], 201);
     }
@@ -64,9 +95,19 @@ class CommentController extends Controller
         ]);
 
         $comment->update($fields);
-
+        // CHATGPT code start
         $comment->load('user:id,username');
+        $comment->loadCount([
+            'reactions as upvotes_count' => fn($q) => $q->where('type', 'upvote'),
+            'reactions as downvotes_count' => fn($q) => $q->where('type', 'downvote'),
+        ]);
 
+        // include authenticated user's own reaction
+        $userReaction = $comment->reactions()
+            ->where('user_id', $request->user()->id)
+            ->first();
+        $comment->user_reaction = $userReaction?->type;
+        // CHATGPT code end
         return response()->json(['data' => $comment]);
     }
 
