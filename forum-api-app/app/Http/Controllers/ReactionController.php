@@ -34,35 +34,35 @@ class ReactionController extends Controller
      */
     private function toggleReaction($reactable, Request $request)
     {
-        $fields = $request->validate([
-            'type' => 'required|string|in:upvote,downvote',
+        $data = $request->validate([
+            'type' => ['required', 'in:upvote,downvote'],
         ]);
-
-        $existing = $reactable->reactions()
-            ->where('user_id', $request->user()->id)
+    
+        $user = $request->user();
+    
+        // najdi existující reakci tohohle usera na TENHLE konkrétní objekt (včetně type)
+        $existingSameType = $reactable->reactions()
+            ->where('user_id', $user->id)
+            ->where('type', $data['type'])
             ->first();
-
-        // same type already exists → un-react (toggle off)
-        if ($existing && $existing->type === $fields['type']) {
-            $existing->delete();
-            return response()->json(['message' => 'Reaction removed.', 'data' => null]);
+    
+        // když už existuje stejný typ -> toggle OFF (smazat)
+        if ($existingSameType) {
+            $existingSameType->delete();
+            return response()->json(['type' => null]);
         }
-
-        // opposite type exists → switch
-        if ($existing) {
-            $existing->update(['type' => $fields['type']]);
-            return response()->json(['message' => 'Reaction updated.', 'data' => $existing]);
-        }
-
-        // no reaction → create
-        $reaction = new Reaction([
-            'type' => $fields['type'],
+    
+        // smaž případnou opačnou reakci (upvote vs downvote), ať je max 1
+        $reactable->reactions()
+            ->where('user_id', $user->id)
+            ->delete();
+    
+        // vytvoř novou reakci (teď už nemůže nastat duplicate)
+        $reactable->reactions()->create([
+            'user_id' => $user->id,
+            'type' => $data['type'],
         ]);
-        $reaction->user_id = $request->user()->id;
-        $reaction->reactable_id = $reactable->id;
-        $reaction->reactable_type = get_class($reactable);
-        $reaction->save();
-
-        return response()->json(['message' => 'Reaction created.', 'data' => $reaction], 201);
+    
+        return response()->json(['type' => $data['type']]);
     }
 }
