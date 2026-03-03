@@ -42,6 +42,49 @@ function isAuthed() {
   return !!getToken();
 }
 
+
+function renderVotes({ kind, id, upvotes_count = 0, downvotes_count = 0, user_reaction = null }) {
+  const upActive = user_reaction === "upvote" ? "is-active" : "";
+  const downActive = user_reaction === "downvote" ? "is-active" : "";
+  return `
+    <span class="pill pill--votes" aria-label="Reakce">
+      <button type="button" class="voteBtn ${upActive}" data-action="vote" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}" data-vote="upvote" aria-pressed="${upActive ? "true" : "false"}" title="Upvote">▲</button>
+      <span class="voteCount" title="Upvotes">${escapeHtml(upvotes_count ?? 0)}</span>
+      <button type="button" class="voteBtn ${downActive}" data-action="vote" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}" data-vote="downvote" aria-pressed="${downActive ? "true" : "false"}" title="Downvote">▼</button>
+      <span class="voteCount" title="Downvotes">${escapeHtml(downvotes_count ?? 0)}</span>
+    </span>
+  `;
+}
+
+async function toggleReaction({ kind, id, type }) {
+  if (!isAuthed()) {
+    showFlash("Pro hlasování se musíš přihlásit.", "err");
+    return;
+  }
+  const base = kind === "comment" ? "comments" : "posts";
+  await api(`/${base}/${encodeURIComponent(id)}/reactions`, { method: "POST", auth: true, body: { type } });
+}
+
+// Delegovaný handler pro hlasování (funguje ve všech obrazovkách)
+$app.addEventListener("click", async (e) => {
+  const btn = e.target?.closest?.("[data-action='vote']");
+  if (!btn) return;
+
+  e.preventDefault();
+  const kind = btn.getAttribute("data-kind");
+  const id = btn.getAttribute("data-id");
+  const type = btn.getAttribute("data-vote");
+
+  try {
+    await toggleReaction({ kind, id, type });
+    // přerender podle aktuálního hashe (zachová stránku/detail)
+    route();
+  } catch (err) {
+    showFlash(err?.message ?? String(err), "err");
+  }
+});
+
+
 function escapeHtml(s) {
   return String(s ?? "")
     .replaceAll("&", "&amp;")
@@ -227,7 +270,7 @@ async function renderPosts({ page = 1 } = {}) {
 
   try {
     const perPage = 10;
-    const payload = await api(`/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`);
+    const payload = await api(`/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`, { auth: isAuthed() });
     const posts = payload?.data ?? [];
     const meta = payload?.meta ?? {};
 
@@ -272,6 +315,7 @@ async function renderPosts({ page = 1 } = {}) {
                 <span class="pill pill--user">${avatarImg(p?.user?.username, 18)}${escapeHtml(p?.user?.username ?? "")}</span>
                 <span class="pill" title="${escapeHtml(fmtDate(p.created_at))}">${escapeHtml(timeAgo(p.created_at))}${edited ? " • Edited" : ""}</span>
                 <span class="pill">💬 ${escapeHtml(p.comments_count ?? 0)}</span>
+                ${renderVotes({ kind: "post", id: p.id, upvotes_count: p.upvotes_count, downvotes_count: p.downvotes_count, user_reaction: p.user_reaction })}
               </div>
 
               <h3 style="margin-top:10px">
@@ -449,9 +493,9 @@ async function renderPostDetail(id) {
   `;
 
   try {
-    const postWrap = await api(`/posts/${encodeURIComponent(id)}`);
+    const postWrap = await api(`/posts/${encodeURIComponent(id)}`, { auth: isAuthed() });
     const post = postWrap?.data;
-    const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments`);
+    const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments`, { auth: isAuthed() });
     const comments = commentsWrap?.data ?? [];
 
     const currentUserId = getUserId();
@@ -468,6 +512,7 @@ async function renderPostDetail(id) {
             <span class="pill pill--user">${avatarImg(post?.user?.username, 18)}${escapeHtml(post?.user?.username ?? "")}</span>
             <span class="pill" title="${escapeHtml(fmtDate(post?.created_at))}">${escapeHtml(timeAgo(post?.created_at))}${editedPost ? " • Edited" : ""}</span>
             <span class="pill">💬 ${escapeHtml(post?.comments_count ?? comments.length)}</span>
+            ${renderVotes({ kind: "post", id: post?.id ?? id, upvotes_count: post?.upvotes_count, downvotes_count: post?.downvotes_count, user_reaction: post?.user_reaction })}
           </div>
         </div>
         <a class="btn" href="#/">← Zpět</a>
@@ -494,6 +539,7 @@ async function renderPostDetail(id) {
                 <span class="pill">#${escapeHtml(c.id)}</span>
                 <span class="pill pill--user">${avatarImg(c?.user?.username, 18)}${escapeHtml(c?.user?.username ?? "")}</span>
                 <span class="pill" title="${escapeHtml(fmtDate(c.created_at))}">${escapeHtml(timeAgo(c.created_at))}${edited ? " • Edited" : ""}</span>
+                ${renderVotes({ kind: "comment", id: c.id, upvotes_count: c.upvotes_count, downvotes_count: c.downvotes_count, user_reaction: c.user_reaction })}
               </div>
               <p class="content" style="margin-top:10px; white-space:pre-wrap">${escapeHtml(c.body)}</p>
               ${isMine ? `
@@ -575,7 +621,7 @@ async function openEditPost(id, existingPost = null) {
   let post = existingPost;
   try {
     if (!post) {
-      const wrap = await api(`/posts/${encodeURIComponent(id)}`);
+      const wrap = await api(`/posts/${encodeURIComponent(id)}`, { auth: isAuthed() });
       post = wrap?.data;
     }
   } catch (e) {
