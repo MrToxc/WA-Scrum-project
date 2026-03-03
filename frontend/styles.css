@@ -279,3 +279,16 @@ a { color: inherit; }
   min-width: 14px;
   text-align: center;
 }
+.forum-title {
+  text-align: center;
+  margin: 2.5rem 0 2rem 0;
+}
+
+.forum-title h1 {
+  font-size: 2.5rem;
+}
+
+.forum-title p {
+  font-size: 1.1rem;
+  color: #666;
+}
