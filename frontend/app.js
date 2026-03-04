@@ -261,7 +261,7 @@ async function renderPosts({ page = 1 } = {}) {
     <div class="row" style="justify-content:space-between; align-items:flex-end;">
       <div>
         <h1>Posty</h1>
-        <div class="muted">Veřejné čtení • Všechny hanlivé nebo příspěvky, které porušují zákon, budou potrestány</div>
+        <div class="muted">Veřejné čtení • Všechny hanlivé nebo urážlivé příspěvky budou potrestány</div>
       </div>
 
     </div>
@@ -299,7 +299,7 @@ async function renderPosts({ page = 1 } = {}) {
       <div class="row" style="justify-content:space-between; align-items:flex-end;">
         <div>
           <h1>Posty</h1>
-          <div class="muted">Veřejné čtení • Všechny hanlivé nebo příspěvky, které porušují zákon, budou potrestány</div>
+          <div class="muted">Veřejné čtení • Všechny hanlivé nebo urážlivé příspěvky budou potrestány</div>
         </div>
   
       </div>
