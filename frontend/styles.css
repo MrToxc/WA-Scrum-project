@@ -322,33 +322,12 @@ a { color: inherit; }
 /* Hide brand (we already show main H1) */
 .brand { display: none; }
 
-.voteBtn {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 16px;
-  padding: 4px 6px;
-  border-radius: 6px;
-}
+.footer__link { color: inherit; text-decoration: underline; }
+.footer__link:hover { opacity: .9; }
 
-/* hover */
-.voteBtn:hover {
-  background: rgba(255,255,255,0.08);
-}
+.pre { background: rgba(0,0,0,.04); border: 1px solid var(--border); border-radius: 12px; padding: 12px; overflow:auto; }
 
-/* aktivní upvote */
-.voteBtn--activeUp {
-  color: #22c55e;
-  background: rgba(34,197,94,0.15);
-}
-
-/* aktivní downvote */
-.voteBtn--activeDown {
-  color: #ef4444;
-  background: rgba(239,68,68,0.15);
-}
-
-.voteCount {
-  margin: 0 6px;
-  font-weight: 600;
-}
+.table { border:1px solid var(--border); border-radius: 12px; overflow:hidden; }
+.table__row { display:grid; grid-template-columns: 1fr 120px; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border);} 
+.table__row:first-child{border-top:none;}
+.table__head{ background: var(--bg2); font-weight:700; }

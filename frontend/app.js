@@ -1,4 +1,4 @@
-import { api, getToken, setAuth, clearAuth, getUsername, getUserId } from "./api.js";
+import { api, getToken, setAuth, clearAuth, getUsername, getUserId, trackUtm } from "./api.js";
 
 const $app = document.getElementById("app");
 const $flash = document.getElementById("flash");
@@ -7,6 +7,52 @@ const $authStatus = document.getElementById("authStatus");
 const $btnLogout = document.getElementById("btnLogout");
 const $btnLoginLink = document.getElementById("btnLoginLink");
 const $btnRegisterLink = document.getElementById("btnRegisterLink");
+
+/* -------- UTM capture + backend tracking (anonymous) --------
+   On first landing (per browser), read UTM params from URL and POST them to /api/v1/track.
+   Fire-and-forget: endpoint returns {message:"OK"} and does not require auth.
+*/
+const UTM_TRACK_KEYS = ["utm_source", "utm_medium", "utm_campaign"];
+
+function readTrackUtmFromUrl() {
+  const params = new URLSearchParams(window.location.search || "");
+  const utm = {};
+  let hasAny = false;
+  for (const k of UTM_TRACK_KEYS) {
+    const v = params.get(k);
+    if (v) { utm[k] = v; hasAny = true; }
+  }
+  return hasAny ? utm : null;
+}
+
+async function captureUtmAndTrack() {
+  try {
+    // We only send once per browser (so refresh doesn't spam backend)
+    if (localStorage.getItem("utm_track_sent") === "1") return;
+
+    const utm = readTrackUtmFromUrl();
+    if (!utm) return;
+
+    // store locally too (useful for debugging / later dashboard)
+    localStorage.setItem("utm_first", JSON.stringify({ ...utm, captured_at: new Date().toISOString() }));
+    localStorage.setItem("utm_track_sent", "1");
+
+    // send to backend (fire-and-forget)
+    trackUtm(utm).catch(() => { /* ignore */ });
+
+    // Optional: clean URL (remove utm_* params so it looks nicer)
+    const params = new URLSearchParams(window.location.search || "");
+    let changed = false;
+    for (const k of UTM_TRACK_KEYS) {
+      if (params.has(k)) { params.delete(k); changed = true; }
+    }
+    if (changed) {
+      const qs = params.toString();
+      const newUrl = window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
+      history.replaceState(null, "", newUrl);
+    }
+  } catch { /* ignore */ }
+}
 const $btnTheme = document.getElementById("btnTheme");
 
 // -------- Theme (light/dark) --------
@@ -47,15 +93,12 @@ function renderVotes({ kind, id, upvotes_count = 0, downvotes_count = 0, user_re
   const upActive = user_reaction === "upvote" ? "is-active" : "";
   const downActive = user_reaction === "downvote" ? "is-active" : "";
   return `
-    <button class="voteBtn ${post.user_reaction === 'upvote' ? 'voteBtn--activeUp' : ''}" 
-        data-type="upvote">▲</button>
-
-  <span class="voteCount">${post.upvotes_count}</span>
-
-  <button class="voteBtn ${post.user_reaction === 'downvote' ? 'voteBtn--activeDown' : ''}" 
-        data-type="downvote">▼</button>
-
-  <span class="voteCount">${post.downvotes_count}</span>
+    <span class="pill pill--votes" aria-label="Reakce">
+      <button type="button" class="voteBtn ${upActive}" data-action="vote" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}" data-vote="upvote" aria-pressed="${upActive ? "true" : "false"}" title="Upvote">▲</button>
+      <span class="voteCount" title="Upvotes">${escapeHtml(upvotes_count ?? 0)}</span>
+      <button type="button" class="voteBtn ${downActive}" data-action="vote" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}" data-vote="downvote" aria-pressed="${downActive ? "true" : "false"}" title="Downvote">▼</button>
+      <span class="voteCount" title="Downvotes">${escapeHtml(downvotes_count ?? 0)}</span>
+    </span>
   `;
 }
 
@@ -81,7 +124,8 @@ $app.addEventListener("click", async (e) => {
   try {
     await toggleReaction({ kind, id, type });
     // přerender podle aktuálního hashe (zachová stránku/detail)
-    route();
+    captureUtmAndTrack();
+route();
   } catch (err) {
     showFlash(err?.message ?? String(err), "err");
   }
@@ -264,7 +308,7 @@ async function renderPosts({ page = 1 } = {}) {
     <div class="row" style="justify-content:space-between; align-items:flex-end;">
       <div>
         <h1>Posty</h1>
-        <div class="muted">Veřejné čtení • Všechny hanlivé nebo urážlivé příspěvky budou potrestány</div>
+        <div class="muted">Veřejné čtení • Všechny hanlivé nebo příspěvky, které porušují zákon, budou potrestány</div>
       </div>
 
     </div>
@@ -302,7 +346,7 @@ async function renderPosts({ page = 1 } = {}) {
       <div class="row" style="justify-content:space-between; align-items:flex-end;">
         <div>
           <h1>Posty</h1>
-          <div class="muted">Veřejné čtení • Všechny hanlivé nebo urážlivé příspěvky budou potrestány</div>
+          <div class="muted">Veřejné čtení • Všechny hanlivé nebo příspěvky, které porušují zákon, budou potrestány</div>
         </div>
   
       </div>

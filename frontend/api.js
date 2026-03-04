@@ -86,3 +86,14 @@ export async function api(path, { method = "GET", body = null, auth = false } = 
  *  - PUT /comments/{comment} (auth+autor)
  *  - DELETE /comments/{comment} (auth+autor)
  */
+
+/**
+ * Fire-and-forget UTM tracking (anonymous).
+ * POST /api/v1/track
+ * Body: { utm_source?, utm_medium?, utm_campaign? }
+ * Response: { message: "OK" }
+ */
+export function trackUtm(utm) {
+  // do not throw if endpoint is down; caller decides whether to await
+  return api("/track", { method: "POST", body: utm, auth: false });
+}
