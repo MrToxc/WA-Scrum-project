@@ -24,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
         Relation::enforceMorphMap([
             'Post' => \App\Models\Post::class,
             'Comment' => \App\Models\Comment::class,
+            'User' => \App\Models\User::class,
         ]);
     }
 }

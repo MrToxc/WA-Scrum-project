@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\ReactionController;
+use App\Http\Controllers\UtmVisitController;
 use Illuminate\Support\Facades\Route;
 
 //Route::get('/user', function (Request $request) {
@@ -77,6 +78,20 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/posts/{post}/reactions', [ReactionController::class, 'storeForPost']);       // POST /api/v1/posts/{id}/reactions
         Route::post('/comments/{comment}/reactions', [ReactionController::class, 'storeForComment']); // POST /api/v1/comments/{id}/reactions
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | UTM TRACKING
+    |----------------------------------------------------------------------
+    */
+
+    // public – no auth required
+    Route::post('/track', [UtmVisitController::class, 'track']);              // POST /api/v1/track
+
+    // protected – analytics dashboard
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/analytics/utm', [UtmVisitController::class, 'stats']);   // GET  /api/v1/analytics/utm
     });
 
 });
