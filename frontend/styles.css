@@ -321,3 +321,34 @@ a { color: inherit; }
 
 /* Hide brand (we already show main H1) */
 .brand { display: none; }
+
+.voteBtn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+/* hover */
+.voteBtn:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* aktivní upvote */
+.voteBtn--activeUp {
+  color: #22c55e;
+  background: rgba(34,197,94,0.15);
+}
+
+/* aktivní downvote */
+.voteBtn--activeDown {
+  color: #ef4444;
+  background: rgba(239,68,68,0.15);
+}
+
+.voteCount {
+  margin: 0 6px;
+  font-weight: 600;
+}

@@ -47,12 +47,15 @@ function renderVotes({ kind, id, upvotes_count = 0, downvotes_count = 0, user_re
   const upActive = user_reaction === "upvote" ? "is-active" : "";
   const downActive = user_reaction === "downvote" ? "is-active" : "";
   return `
-    <span class="pill pill--votes" aria-label="Reakce">
-      <button type="button" class="voteBtn ${upActive}" data-action="vote" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}" data-vote="upvote" aria-pressed="${upActive ? "true" : "false"}" title="Upvote">▲</button>
-      <span class="voteCount" title="Upvotes">${escapeHtml(upvotes_count ?? 0)}</span>
-      <button type="button" class="voteBtn ${downActive}" data-action="vote" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}" data-vote="downvote" aria-pressed="${downActive ? "true" : "false"}" title="Downvote">▼</button>
-      <span class="voteCount" title="Downvotes">${escapeHtml(downvotes_count ?? 0)}</span>
-    </span>
+    <button class="voteBtn ${post.user_reaction === 'upvote' ? 'voteBtn--activeUp' : ''}" 
+        data-type="upvote">▲</button>
+
+  <span class="voteCount">${post.upvotes_count}</span>
+
+  <button class="voteBtn ${post.user_reaction === 'downvote' ? 'voteBtn--activeDown' : ''}" 
+        data-type="downvote">▼</button>
+
+  <span class="voteCount">${post.downvotes_count}</span>
   `;
 }
 
