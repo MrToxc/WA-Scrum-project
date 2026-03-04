@@ -279,16 +279,33 @@ a { color: inherit; }
   min-width: 14px;
   text-align: center;
 }
+
+/* SEO title block */
 .forum-title {
   text-align: center;
   margin: 2.5rem 0 2rem 0;
 }
+.forum-title h1 { font-size: 2.5rem; margin: 0; }
+.forum-title p { font-size: 1.1rem; margin: .5rem 0 0 0; color: var(--muted); }
 
-.forum-title h1 {
-  font-size: 2.5rem;
+/* Nav button for posts */
+.nav__btn { gap: 8px; }
+
+/* Password reveal (registration) */
+.pwReveal {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+.pwReveal__input {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.pwReveal__btn {
+  min-width: 42px;
+  padding: 8px 10px;
 }
 
-.forum-title p {
-  font-size: 1.1rem;
-  color: #666;
-}

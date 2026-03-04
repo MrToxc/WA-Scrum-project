@@ -419,7 +419,12 @@ function renderRegister() {
           <p><b>Tohle heslo uvidíš jen jednou.</b> Ulož si ho (např. do správce hesel).</p>
           <div class="card" style="background:rgba(0,0,0,.04); border:1px dashed rgba(0,0,0,.25)">
             <div class="muted">Tvůj tajný klíč (password)</div>
-            <div style="font-size:18px; font-weight:700; margin-top:6px; word-break:break-all;">${escapeHtml(data.password)}</div>
+<div class="pwReveal">
+  <input id="generatedPassword" class="pwReveal__input" type="password" readonly value="${escapeHtml(data.password)}" />
+  <button class="btn pwReveal__btn" type="button" id="btnTogglePw" aria-label="Ukázat/skrýt heslo">👁️</button>
+  <button class="btn pwReveal__btn" type="button" id="btnCopyPw" aria-label="Kopírovat heslo">📋</button>
+</div>
+<div class="muted" style="margin-top:8px;">Tip: klikni na 👁️ pro zobrazení nebo na 📋 pro zkopírování.</div>
           </div>
           <div class="row" style="gap:8px; margin-top:12px; flex-wrap:wrap;">
             <a class="btn btn--primary" href="#/">Pokračovat na posty</a>
@@ -428,7 +433,33 @@ function renderRegister() {
         </div>
       `;
 
-      
+
+// Password buttons
+const pwInput = document.getElementById("generatedPassword");
+const btnTogglePw = document.getElementById("btnTogglePw");
+const btnCopyPw = document.getElementById("btnCopyPw");
+
+if (btnTogglePw && pwInput) {
+  btnTogglePw.addEventListener("click", () => {
+    pwInput.type = pwInput.type === "password" ? "text" : "password";
+  });
+}
+
+if (btnCopyPw && pwInput) {
+  btnCopyPw.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(pwInput.value);
+      showFlash("Heslo zkopírováno do schránky.", "ok");
+    } catch {
+      // Fallback
+      pwInput.type = "text";
+      pwInput.select();
+      document.execCommand("copy");
+      pwInput.type = "password";
+      showFlash("Heslo zkopírováno.", "ok");
+    }
+  });
+}
 
       // doplníme user_id přes /auth/me (pokud token už funguje)
       try {
