@@ -1,4 +1,4 @@
-import { api, getToken, setAuth, clearAuth, getUsername, getUserId, trackUtm } from "./api.js";
+import { api, getToken, setAuth, clearAuth, getUsername, getUserId } from "./api.js";
 
 const $app = document.getElementById("app");
 const $flash = document.getElementById("flash");
@@ -8,129 +8,115 @@ const $btnLogout = document.getElementById("btnLogout");
 const $btnLoginLink = document.getElementById("btnLoginLink");
 const $btnRegisterLink = document.getElementById("btnRegisterLink");
 
-/* -------- UTM capture + backend tracking (anonymous) --------
-   On first landing (per browser), read UTM params from URL and POST them to /api/v1/track.
-   Fire-and-forget: endpoint returns {message:"OK"} and does not require auth.
+/* -------- Cookie consent + UTM tracking --------
+   - Show banner on first visit
+   - If user accepts, store consent cookie and:
+       - store UTM values into cookies (utm_source/utm_medium/utm_campaign)
+       - POST them to backend endpoint: POST /api/v1/track (no auth, fire-and-forget)
 */
-const UTM_TRACK_KEYS = ["utm_source", "utm_medium", "utm_campaign"];
 
-function readTrackUtmFromUrl() {
+function getCookie(name) {
+  const m = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)"));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function setCookie(name, value, maxAgeSeconds = 60 * 60 * 24 * 365) {
+  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}`;
+}
+
+function showCookieBanner() {
+  const banner = document.getElementById("cookieBanner");
+  if (!banner) return;
+  banner.style.display = "block";
+}
+
+function hideCookieBanner() {
+  const banner = document.getElementById("cookieBanner");
+  if (!banner) return;
+  banner.style.display = "none";
+}
+
+function readUtmFromUrl() {
   const params = new URLSearchParams(window.location.search || "");
-  const utm = {};
-  let hasAny = false;
-  for (const k of UTM_TRACK_KEYS) {
-    const v = params.get(k);
-    if (v) { utm[k] = v; hasAny = true; }
-  }
-  return hasAny ? utm : null;
+  const utm = {
+    utm_source: params.get("utm_source"),
+    utm_medium: params.get("utm_medium"),
+    utm_campaign: params.get("utm_campaign"),
+  };
+  if (!utm.utm_source && !utm.utm_medium && !utm.utm_campaign) return null;
+  Object.keys(utm).forEach(k => { if (!utm[k]) delete utm[k]; });
+  return utm;
 }
 
-async function captureUtmAndTrack() {
-  try {
-    // We only send once per browser (so refresh doesn't spam backend)
-    if (localStorage.getItem("utm_track_sent") === "1") return;
-
-    const utm = readTrackUtmFromUrl();
-    if (!utm) return;
-
-    // store locally too (useful for debugging / later dashboard)
-    localStorage.setItem("utm_first", JSON.stringify({ ...utm, captured_at: new Date().toISOString() }));
-    localStorage.setItem("utm_track_sent", "1");
-
-    // send to backend (fire-and-forget)
-    trackUtm(utm).catch(() => { /* ignore */ });
-
-    // Optional: clean URL (remove utm_* params so it looks nicer)
-    const params = new URLSearchParams(window.location.search || "");
-    let changed = false;
-    for (const k of UTM_TRACK_KEYS) {
-      if (params.has(k)) { params.delete(k); changed = true; }
-    }
-    if (changed) {
-      const qs = params.toString();
-      const newUrl = window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
-      history.replaceState(null, "", newUrl);
-    }
-  } catch { /* ignore */ }
-}
-const $btnTheme = document.getElementById("btnTheme");
-
-// -------- Theme (light/dark) --------
-function getPreferredTheme() {
-  const stored = localStorage.getItem("theme");
-  if (stored === "dark" || stored === "light") return stored;
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  return prefersDark ? "dark" : "light";
+function cleanUtmFromUrl() {
+  const params = new URLSearchParams(window.location.search || "");
+  let changed = false;
+  ["utm_source", "utm_medium", "utm_campaign"].forEach(k => {
+    if (params.has(k)) { params.delete(k); changed = true; }
+  });
+  if (!changed) return;
+  const qs = params.toString();
+  const newUrl = window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
+  history.replaceState(null, "", newUrl);
 }
 
-function applyTheme(theme) {
-  const isDark = theme === "dark";
-  document.documentElement.classList.toggle("dark", isDark);
-  if ($btnTheme) {
-    $btnTheme.textContent = isDark ? "☀️" : "🌙";
-    $btnTheme.setAttribute("aria-label", isDark ? "Přepnout na světlý režim" : "Přepnout na tmavý režim");
-    $btnTheme.title = isDark ? "Světlý režim" : "Tmavý režim";
-  }
+function saveUtmToCookies(utm) {
+  const month = 60 * 60 * 24 * 30;
+  if (utm.utm_source) setCookie("utm_source", utm.utm_source, month);
+  if (utm.utm_medium) setCookie("utm_medium", utm.utm_medium, month);
+  if (utm.utm_campaign) setCookie("utm_campaign", utm.utm_campaign, month);
 }
 
-function toggleTheme() {
-  const current = document.documentElement.classList.contains("dark") ? "dark" : "light";
-  const next = current === "dark" ? "light" : "dark";
-  localStorage.setItem("theme", next);
-  applyTheme(next);
+function sendUtmToBackend(utm) {
+  fetch("/api/v1/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(utm),
+  }).catch(() => {});
 }
 
-applyTheme(getPreferredTheme());
+function maybeTrackUtm() {
+  if (sessionStorage.getItem("utm_sent") === "1") return;
 
-$btnTheme?.addEventListener("click", toggleTheme);
+  const utm = readUtmFromUrl();
+  if (!utm) return;
 
-function isAuthed() {
-  return !!getToken();
+  saveUtmToCookies(utm);
+  sendUtmToBackend(utm);
+  sessionStorage.setItem("utm_sent", "1");
+
+  cleanUtmFromUrl();
 }
 
+function initCookieConsent() {
+  const consent = getCookie("cookie_consent"); // "accepted" | "declined" | null
+  const acceptBtn = document.getElementById("acceptCookies");
+  const declineBtn = document.getElementById("declineCookies");
 
-function renderVotes({ kind, id, upvotes_count = 0, downvotes_count = 0, user_reaction = null }) {
-  const upActive = user_reaction === "upvote" ? "is-active" : "";
-  const downActive = user_reaction === "downvote" ? "is-active" : "";
-  return `
-    <span class="pill pill--votes" aria-label="Reakce">
-      <button type="button" class="voteBtn ${upActive}" data-action="vote" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}" data-vote="upvote" aria-pressed="${upActive ? "true" : "false"}" title="Upvote">▲</button>
-      <span class="voteCount" title="Upvotes">${escapeHtml(upvotes_count ?? 0)}</span>
-      <button type="button" class="voteBtn ${downActive}" data-action="vote" data-kind="${escapeHtml(kind)}" data-id="${escapeHtml(id)}" data-vote="downvote" aria-pressed="${downActive ? "true" : "false"}" title="Downvote">▼</button>
-      <span class="voteCount" title="Downvotes">${escapeHtml(downvotes_count ?? 0)}</span>
-    </span>
-  `;
-}
+  if (!consent) {
+    showCookieBanner();
 
-async function toggleReaction({ kind, id, type }) {
-  if (!isAuthed()) {
-    showFlash("Pro hlasování se musíš přihlásit.", "err");
+    acceptBtn?.addEventListener("click", () => {
+      setCookie("cookie_consent", "accepted", 60 * 60 * 24 * 365);
+      hideCookieBanner();
+      maybeTrackUtm();
+    });
+
+    declineBtn?.addEventListener("click", () => {
+      setCookie("cookie_consent", "declined", 60 * 60 * 24 * 365);
+      hideCookieBanner();
+    });
+
     return;
   }
-  const base = kind === "comment" ? "comments" : "posts";
-  await api(`/${base}/${encodeURIComponent(id)}/reactions`, { method: "POST", auth: true, body: { type } });
+
+  hideCookieBanner();
+  if (consent === "accepted") {
+    maybeTrackUtm();
+  }
 }
 
-// Delegovaný handler pro hlasování (funguje ve všech obrazovkách)
-$app.addEventListener("click", async (e) => {
-  const btn = e.target?.closest?.("[data-action='vote']");
-  if (!btn) return;
-
-  e.preventDefault();
-  const kind = btn.getAttribute("data-kind");
-  const id = btn.getAttribute("data-id");
-  const type = btn.getAttribute("data-vote");
-
-  try {
-    await toggleReaction({ kind, id, type });
-    // přerender podle aktuálního hashe (zachová stránku/detail)
-    captureUtmAndTrack();
-route();
-  } catch (err) {
-    showFlash(err?.message ?? String(err), "err");
-  }
-});
-
+/* ---------- helpers ---------- */
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -141,147 +127,51 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-function avatarUrl(username) {
-  const u = String(username ?? "").trim();
-  return `https://avatars.laravel.cloud/${encodeURIComponent(u || "user")}`;
-}
-
-function avatarImg(username, size = 22) {
-  // avatars.laravel.cloud generuje SVG/PNG – držíme jednoduché <img>
-  const url = avatarUrl(username);
-  return `<img class="avatar" src="${escapeHtml(url)}" alt="" width="${size}" height="${size}" loading="lazy" referrerpolicy="no-referrer" />`;
-}
-
-function fmtDate(s) {
-  // backend posílá ISO 8601 – jen lehká humanizace
-  if (!s) return "";
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return String(s);
-  return d.toLocaleString();
-}
-
-function timeAgo(s) {
-  if (!s) return "";
-  const d = new Date(s);
-  const t = d.getTime();
-  if (Number.isNaN(t)) return String(s);
-
-  const diffMs = Date.now() - t;
-  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
-
-  if (diffSec < 10) return "právě teď";
-  if (diffSec < 60) return `před ${diffSec} s`;
-
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `před ${diffMin} min`;
-
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `před ${diffH} h`;
-
-  const diffD = Math.floor(diffH / 24);
-  return `před ${diffD} d`;
-}
-
-function isEdited(createdAt, updatedAt) {
-  if (!createdAt || !updatedAt) return false;
-  const c = new Date(createdAt).getTime();
-  const u = new Date(updatedAt).getTime();
-  if (Number.isNaN(c) || Number.isNaN(u)) return false;
-  return (u - c) > 5000; // README: tolerance 5s
-}
-
-function showFlash(message, type = "ok") {
-  $flash.className = `flash ${type === "ok" ? "flash--ok" : "flash--err"}`;
-  $flash.textContent = message;
+function showFlash(msg, type = "ok") {
+  if (!$flash) return;
+  $flash.className = "flash " + (type === "err" ? "flash--err" : "flash--ok");
+  $flash.textContent = msg;
   $flash.style.display = "block";
-  window.setTimeout(() => ($flash.style.display = "none"), 3200);
+  setTimeout(() => { $flash.style.display = "none"; }, 3000);
 }
 
-// -------- Modal (for edit dialogs) --------
-function openModal({ title = "", contentHtml = "", onSubmit = null, submitText = "Uložit" } = {}) {
-  // Close existing modal if any
-  document.getElementById("modalBackdrop")?.remove();
-
-  const backdrop = document.createElement("div");
-  backdrop.id = "modalBackdrop";
-  backdrop.className = "modal-backdrop";
-  backdrop.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
-      <div class="modal__header">
-        <div class="modal__title">${escapeHtml(title)}</div>
-      </div>
-      <div class="modal__body">${contentHtml}</div>
-      <div class="modal__footer">
-        <button class="btn" type="button" data-modal-cancel>Zrušit</button>
-        <button class="btn btn--primary" type="submit" form="modalForm">${escapeHtml(submitText)}</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(backdrop);
-
-  const modal = backdrop.querySelector(".modal");
-  const cancelBtn = backdrop.querySelector("[data-modal-cancel]");
-
-  function close() {
-    document.removeEventListener("keydown", onKey);
-    backdrop.remove();
-  }
-
-  function onKey(e) {
-    if (e.key === "Escape") close();
-  }
-
-  document.addEventListener("keydown", onKey);
-
-  // click outside closes
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) close();
-  });
-  cancelBtn.addEventListener("click", close);
-
-  const form = backdrop.querySelector("#modalForm");
-  if (form && typeof onSubmit === "function") {
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const ok = await onSubmit(new FormData(form), close);
-      if (ok) close();
-    });
-  }
-
-  // focus first input/textarea
-  window.setTimeout(() => {
-    modal.querySelector("input, textarea, button")?.focus();
-  }, 0);
-
-  return { close };
+function isAuthed() {
+  return Boolean(getToken());
 }
 
 function renderAuthUI() {
-  const authed = isAuthed();
-  const user = getUsername();
-
-  $authStatus.innerHTML = authed
-    ? `<span class="authStatus">${avatarImg(user, 20)}<span>přihlášen jako <b>${escapeHtml(user ?? "?")}</b></span></span>`
-    : "nepřihlášen";
-  $btnLogout.style.display = authed ? "inline-flex" : "none";
-  $btnLoginLink.style.display = authed ? "none" : "inline-flex";
-  $btnRegisterLink.style.display = authed ? "none" : "inline-flex";
-
-  document.querySelectorAll(".auth-only").forEach(el => {
-    el.style.display = authed ? "inline-flex" : "none";
-  });
+  const username = getUsername();
+  if (username) {
+    $authStatus.textContent = `přihlášen jako ${username}`;
+    $btnLogout.style.display = "inline-flex";
+    $btnLoginLink.style.display = "none";
+    $btnRegisterLink.style.display = "none";
+    document.querySelectorAll(".auth-only").forEach(el => el.style.display = "inline-flex");
+  } else {
+    $authStatus.textContent = "Nepřihlášen";
+    $btnLogout.style.display = "none";
+    $btnLoginLink.style.display = "inline-flex";
+    $btnRegisterLink.style.display = "inline-flex";
+    document.querySelectorAll(".auth-only").forEach(el => el.style.display = "none");
+  }
 }
 
-$btnLogout.addEventListener("click", async () => {
-  try { await api("/auth/logout", { method: "POST", auth: true }); } catch { /* ignore */ }
+document.getElementById("btnTheme")?.addEventListener("click", () => {
+  const root = document.documentElement;
+  const isDark = root.classList.toggle("dark");
+  localStorage.setItem("theme", isDark ? "dark" : "light");
+});
+
+$btnLogout?.addEventListener("click", async () => {
+  try { await api("/auth/logout", { method: "POST", auth: true }); } catch {}
   clearAuth();
   renderAuthUI();
-  location.hash = "#/";
+  location.hash = "#/login";
   showFlash("Odhlášeno.", "ok");
 });
 
-// -------- Router (hash-based) --------
+/* ---------- Router ---------- */
+
 function route() {
   const hash = location.hash || "#/";
   const [path, queryString] = hash.slice(1).split("?");
@@ -310,7 +200,6 @@ async function renderPosts({ page = 1 } = {}) {
         <h1>Posty</h1>
         <div class="muted">Veřejné čtení • Všechny hanlivé nebo příspěvky, které porušují zákon, budou potrestány</div>
       </div>
-
     </div>
     <div class="card muted">Načítám…</div>
   `;
@@ -324,53 +213,45 @@ async function renderPosts({ page = 1 } = {}) {
     if (!posts.length) {
       $app.innerHTML = `
         <h1>Posty</h1>
-        <div class="card muted">Zatím žádné posty.</div>
+        <div class="card muted">Zatím žádné příspěvky.</div>
       `;
       renderAuthUI();
       return;
     }
 
-    const currentUserId = getUserId();
-
     const pager = `
-      <div class="row" style="justify-content:space-between; align-items:center; margin-top:14px;">
-        <div class="muted">Stránka ${escapeHtml(meta.page ?? page)} / ${escapeHtml(meta.last_page ?? 1)} • Celkem ${escapeHtml(meta.total ?? posts.length)}</div>
-        <div class="row" style="gap:8px;">
-          <a class="btn" href="#/?page=${Math.max(1, (meta.page ?? page) - 1)}" ${((meta.page ?? page) <= 1) ? 'aria-disabled="true" style="pointer-events:none;opacity:.5"' : ""}>←</a>
-          <a class="btn" href="#/?page=${Math.min((meta.last_page ?? page), (meta.page ?? page) + 1)}" ${((meta.page ?? page) >= (meta.last_page ?? page)) ? 'aria-disabled="true" style="pointer-events:none;opacity:.5"' : ""}>→</a>
-        </div>
+      <div class="row" style="justify-content:space-between; margin-top:12px;">
+        <a class="btn" href="#/?page=${Math.max(1, (meta.current_page || 1) - 1)}">← Předchozí</a>
+        <div class="muted">Strana ${(meta.current_page || 1)} / ${(meta.last_page || 1)}</div>
+        <a class="btn" href="#/?page=${Math.min((meta.last_page || 1), (meta.current_page || 1) + 1)}">Další →</a>
       </div>
     `;
 
     $app.innerHTML = `
-      <div class="row" style="justify-content:space-between; align-items:flex-end;">
-        <div>
-          <h1>Posty</h1>
-          <div class="muted">Veřejné čtení • Všechny hanlivé nebo příspěvky, které porušují zákon, budou potrestány</div>
-        </div>
-  
-      </div>
-
       <div class="list">
         ${posts.map(p => {
-          const edited = isEdited(p.created_at, p.updated_at);
-          const isMine = currentUserId != null && p?.user?.id === currentUserId;
+          const ur = p.user_reaction;
           return `
             <div class="card">
-              <div class="thread__meta">
-                <span class="pill">#${escapeHtml(p.id)}</span>
-                <span class="pill pill--user">${avatarImg(p?.user?.username, 18)}${escapeHtml(p?.user?.username ?? "")}</span>
-                <span class="pill" title="${escapeHtml(fmtDate(p.created_at))}">${escapeHtml(timeAgo(p.created_at))}${edited ? " • Edited" : ""}</span>
-                <span class="pill">💬 ${escapeHtml(p.comments_count ?? 0)}</span>
-                ${renderVotes({ kind: "post", id: p.id, upvotes_count: p.upvotes_count, downvotes_count: p.downvotes_count, user_reaction: p.user_reaction })}
+              <div class="row" style="justify-content:space-between; align-items:flex-start;">
+                <div style="flex:1">
+                  <a href="#/post/${encodeURIComponent(p.id)}" style="text-decoration:none; color:inherit;">
+                    <h2 style="margin:0 0 6px 0">${escapeHtml(p.title)}</h2>
+                  </a>
+                  <div class="muted">autor: <b>${escapeHtml(p.author_username || "unknown")}</b> • ${escapeHtml(p.created_at || "")}</div>
+                </div>
+
+                <div class="pill--votes" title="Hlasování">
+                  <button class="voteBtn ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="upvote">▲</button>
+                  <span class="voteCount">${Number(p.upvotes_count ?? 0)}</span>
+                  <button class="voteBtn ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="downvote">▼</button>
+                  <span class="voteCount">${Number(p.downvotes_count ?? 0)}</span>
+                </div>
               </div>
 
-              <h3 style="margin-top:10px">
-                <a href="#/post/${encodeURIComponent(p.id)}">${escapeHtml(p.title)}</a>
-              </h3>
-              <p class="muted content">${escapeHtml(String(p.body ?? "").slice(0, 160))}${String(p.body ?? "").length > 160 ? "…" : ""}</p>
+              <div style="margin-top:10px; white-space:pre-wrap;">${escapeHtml(p.body || "")}</div>
 
-              ${isMine ? `
+              ${(isAuthed() && (Number(getUserId()) === Number(p.user_id))) ? `
                 <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
                   <button class="btn" data-action="edit-post" data-id="${escapeHtml(p.id)}">Upravit</button>
                   <button class="btn btn--danger" data-action="delete-post" data-id="${escapeHtml(p.id)}">Smazat</button>
@@ -384,7 +265,7 @@ async function renderPosts({ page = 1 } = {}) {
       ${pager}
     `;
 
-    // bind edit/delete (delegace)
+    // bind edit/delete
     $app.querySelectorAll("[data-action='edit-post']").forEach(btn => {
       btn.addEventListener("click", () => openEditPost(btn.getAttribute("data-id")));
     });
@@ -405,25 +286,24 @@ function renderLogin() {
     <div class="card">
       <form id="loginForm">
         <label class="muted">Heslo (to vygenerované při registraci)</label>
-        <input name="pass" required type="password" placeholder="••••••••" />
+        <input name="password" required minlength="3" placeholder="vložit heslo" />
         <div style="height:10px"></div>
         <button class="btn btn--primary" type="submit">Přihlásit</button>
       </form>
-      <div class="muted" style="margin-top:10px;">Pozn.: přihlášení vždy zruší staré tokeny (jen 1 aktivní přihlášení).</div>
     </div>
   `;
 
   document.getElementById("loginForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const fd = new FormData(ev.target);
-    const pass = String(fd.get("pass") || "");
+    const password = String(fd.get("password") || "").trim();
 
     try {
-      const data = await api("/auth/login", { method: "POST", body: { password: pass } });
+      const data = await api("/auth/login", { method: "POST", body: { password } });
       setAuth({ token: data.token, user: data.user });
       renderAuthUI();
-      location.hash = "#/";
       showFlash("Přihlášení OK.", "ok");
+      location.hash = "#/";
     } catch (e) {
       showFlash(e.message, "err");
     }
@@ -455,23 +335,21 @@ function renderRegister() {
     try {
       const data = await api("/auth/register", { method: "POST", body: { username } });
 
-      // Backend vrátí {username, password, token}
       setAuth({ token: data.token, user: { id: null, username: data.username } });
       renderAuthUI();
 
-      // "Password reveal" screen (jen tady)
       $app.innerHTML = `
         <h1>Hotovo ✅</h1>
         <div class="card">
           <p><b>Tohle heslo uvidíš jen jednou.</b> Ulož si ho (např. do správce hesel).</p>
           <div class="card" style="background:rgba(0,0,0,.04); border:1px dashed rgba(0,0,0,.25)">
             <div class="muted">Tvůj tajný klíč (password)</div>
-<div class="pwReveal">
-  <input id="generatedPassword" class="pwReveal__input" type="password" readonly value="${escapeHtml(data.password)}" />
-  <button class="btn pwReveal__btn" type="button" id="btnTogglePw" aria-label="Ukázat/skrýt heslo">👁️</button>
-  <button class="btn pwReveal__btn" type="button" id="btnCopyPw" aria-label="Kopírovat heslo">📋</button>
-</div>
-<div class="muted" style="margin-top:8px;">Tip: klikni na 👁️ pro zobrazení nebo na 📋 pro zkopírování.</div>
+            <div class="pwReveal">
+              <input id="generatedPassword" class="pwReveal__input" type="password" readonly value="${escapeHtml(data.password)}" />
+              <button class="btn pwReveal__btn" type="button" id="btnTogglePw" aria-label="Ukázat/skrýt heslo">👁️</button>
+              <button class="btn pwReveal__btn" type="button" id="btnCopyPw" aria-label="Kopírovat heslo">📋</button>
+            </div>
+            <div class="muted" style="margin-top:8px;">Tip: klikni na 👁️ pro zobrazení nebo na 📋 pro zkopírování.</div>
           </div>
           <div class="row" style="gap:8px; margin-top:12px; flex-wrap:wrap;">
             <a class="btn btn--primary" href="#/">Pokračovat na posty</a>
@@ -480,40 +358,34 @@ function renderRegister() {
         </div>
       `;
 
+      const pwInput = document.getElementById("generatedPassword");
+      const btnTogglePw = document.getElementById("btnTogglePw");
+      const btnCopyPw = document.getElementById("btnCopyPw");
 
-// Password buttons
-const pwInput = document.getElementById("generatedPassword");
-const btnTogglePw = document.getElementById("btnTogglePw");
-const btnCopyPw = document.getElementById("btnCopyPw");
+      btnTogglePw?.addEventListener("click", () => {
+        if (!pwInput) return;
+        pwInput.type = pwInput.type === "password" ? "text" : "password";
+      });
 
-if (btnTogglePw && pwInput) {
-  btnTogglePw.addEventListener("click", () => {
-    pwInput.type = pwInput.type === "password" ? "text" : "password";
-  });
-}
+      btnCopyPw?.addEventListener("click", async () => {
+        if (!pwInput) return;
+        try {
+          await navigator.clipboard.writeText(pwInput.value);
+          showFlash("Heslo zkopírováno do schránky.", "ok");
+        } catch {
+          pwInput.type = "text";
+          pwInput.select();
+          document.execCommand("copy");
+          pwInput.type = "password";
+          showFlash("Heslo zkopírováno.", "ok");
+        }
+      });
 
-if (btnCopyPw && pwInput) {
-  btnCopyPw.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(pwInput.value);
-      showFlash("Heslo zkopírováno do schránky.", "ok");
-    } catch {
-      // Fallback
-      pwInput.type = "text";
-      pwInput.select();
-      document.execCommand("copy");
-      pwInput.type = "password";
-      showFlash("Heslo zkopírováno.", "ok");
-    }
-  });
-}
-
-      // doplníme user_id přes /auth/me (pokud token už funguje)
       try {
         const me = await api("/auth/me", { auth: true });
         setAuth({ token: getToken(), user: me });
         renderAuthUI();
-      } catch { /* ignore */ }
+      } catch {}
 
     } catch (e) {
       showFlash(e.message, "err");
@@ -565,89 +437,118 @@ function renderNewPost() {
 }
 
 async function renderPostDetail(id) {
-  $app.innerHTML = `
-    <h1>Post #${escapeHtml(id)}</h1>
-    <div class="card muted">Načítám…</div>
-  `;
+  $app.innerHTML = `<div class="card muted">Načítám…</div>`;
 
   try {
     const postWrap = await api(`/posts/${encodeURIComponent(id)}`, { auth: isAuthed() });
-    const post = postWrap?.data;
+    const p = postWrap?.data;
+
     const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments`, { auth: isAuthed() });
     const comments = commentsWrap?.data ?? [];
 
-    const currentUserId = getUserId();
-    const isMinePost = currentUserId != null && post?.user?.id === currentUserId;
-
-    const editedPost = isEdited(post?.created_at, post?.updated_at);
+    const ur = p?.user_reaction;
 
     $app.innerHTML = `
       <div class="row" style="justify-content:space-between; align-items:flex-end;">
-        <div>
-          <h1>${escapeHtml(post?.title ?? "")}</h1>
-          <div class="thread__meta muted">
-            <span class="pill">#${escapeHtml(post?.id ?? id)}</span>
-            <span class="pill pill--user">${avatarImg(post?.user?.username, 18)}${escapeHtml(post?.user?.username ?? "")}</span>
-            <span class="pill" title="${escapeHtml(fmtDate(post?.created_at))}">${escapeHtml(timeAgo(post?.created_at))}${editedPost ? " • Edited" : ""}</span>
-            <span class="pill">💬 ${escapeHtml(post?.comments_count ?? comments.length)}</span>
-            ${renderVotes({ kind: "post", id: post?.id ?? id, upvotes_count: post?.upvotes_count, downvotes_count: post?.downvotes_count, user_reaction: post?.user_reaction })}
-          </div>
-        </div>
         <a class="btn" href="#/">← Zpět</a>
+        <div class="pill--votes" title="Hlasování">
+          <button class="voteBtn ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="upvote">▲</button>
+          <span class="voteCount">${Number(p.upvotes_count ?? 0)}</span>
+          <button class="voteBtn ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="downvote">▼</button>
+          <span class="voteCount">${Number(p.downvotes_count ?? 0)}</span>
+        </div>
       </div>
 
-      <div class="card">
-        <p class="content" style="white-space:pre-wrap">${escapeHtml(post?.body ?? "")}</p>
-        ${isMinePost ? `
+      <div class="card" style="margin-top:12px;">
+        <h1 style="margin-top:0">${escapeHtml(p.title)}</h1>
+        <div class="muted">autor: <b>${escapeHtml(p.author_username || "unknown")}</b> • ${escapeHtml(p.created_at || "")}</div>
+        <div style="margin-top:12px; white-space:pre-wrap;">${escapeHtml(p.body || "")}</div>
+
+        ${(isAuthed() && (Number(getUserId()) === Number(p.user_id))) ? `
           <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
-            <button class="btn" id="btnEditPost">Upravit</button>
-            <button class="btn btn--danger" id="btnDeletePost">Smazat</button>
+            <button class="btn" data-action="edit-post" data-id="${escapeHtml(p.id)}">Upravit</button>
+            <button class="btn btn--danger" data-action="delete-post" data-id="${escapeHtml(p.id)}">Smazat</button>
           </div>
         ` : ""}
       </div>
 
-      <h2>Komentáře</h2>
-      <div class="list">
-        ${comments.map(c => {
-          const edited = isEdited(c.created_at, c.updated_at);
-          const isMine = currentUserId != null && c?.user?.id === currentUserId;
+      <div class="card" style="margin-top:12px;">
+        <h2 style="margin-top:0">Komentáře</h2>
+
+        ${comments.length ? comments.map(c => {
+          const cur = c.user_reaction;
           return `
-            <div class="card">
-              <div class="thread__meta muted">
-                <span class="pill">#${escapeHtml(c.id)}</span>
-                <span class="pill pill--user">${avatarImg(c?.user?.username, 18)}${escapeHtml(c?.user?.username ?? "")}</span>
-                <span class="pill" title="${escapeHtml(fmtDate(c.created_at))}">${escapeHtml(timeAgo(c.created_at))}${edited ? " • Edited" : ""}</span>
-                ${renderVotes({ kind: "comment", id: c.id, upvotes_count: c.upvotes_count, downvotes_count: c.downvotes_count, user_reaction: c.user_reaction })}
-              </div>
-              <p class="content" style="margin-top:10px; white-space:pre-wrap">${escapeHtml(c.body)}</p>
-              ${isMine ? `
-                <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
-                  <button class="btn" data-action="edit-comment" data-id="${escapeHtml(c.id)}">Upravit</button>
-                  <button class="btn btn--danger" data-action="delete-comment" data-id="${escapeHtml(c.id)}">Smazat</button>
+            <div class="card" style="margin-top:10px;">
+              <div class="row" style="justify-content:space-between; align-items:flex-start;">
+                <div>
+                  <div class="muted">autor: <b>${escapeHtml(c.author_username || "unknown")}</b> • ${escapeHtml(c.created_at || "")}</div>
                 </div>
-              ` : ""}
+                <div class="pill--votes" title="Hlasování">
+                  <button class="voteBtn ${cur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="comment" data-id="${escapeHtml(c.id)}" data-type="upvote">▲</button>
+                  <span class="voteCount">${Number(c.upvotes_count ?? 0)}</span>
+                  <button class="voteBtn ${cur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="comment" data-id="${escapeHtml(c.id)}" data-type="downvote">▼</button>
+                  <span class="voteCount">${Number(c.downvotes_count ?? 0)}</span>
+                </div>
+              </div>
+              <div style="margin-top:10px; white-space:pre-wrap;">${escapeHtml(c.body || "")}</div>
             </div>
           `;
-        }).join("")}
-        ${comments.length === 0 ? `<div class="card muted">Zatím žádné komentáře.</div>` : ""}
-      </div>
+        }).join("") : `<div class="muted">Zatím žádné komentáře.</div>`}
 
-      <div class="card" id="commentBox"></div>
+        ${isAuthed() ? `
+          <div style="height:14px"></div>
+          <form id="newCommentForm">
+            <label class="muted">Napsat komentář</label>
+            <textarea name="body" required minlength="2" maxlength="8191" placeholder="Komentář…"></textarea>
+            <div style="height:10px"></div>
+            <button class="btn btn--primary" type="submit">Přidat</button>
+          </form>
+        ` : `<div class="muted">Pro psaní komentářů se přihlas.</div>`}
+      </div>
     `;
 
-    if (isMinePost) {
-      document.getElementById("btnEditPost").addEventListener("click", () => openEditPost(id, post));
-      document.getElementById("btnDeletePost").addEventListener("click", () => doDeletePost(id));
-    }
-
-    $app.querySelectorAll("[data-action='edit-comment']").forEach(btn => {
-      btn.addEventListener("click", () => openEditComment(btn.getAttribute("data-id"), id));
-    });
-    $app.querySelectorAll("[data-action='delete-comment']").forEach(btn => {
-      btn.addEventListener("click", () => doDeleteComment(btn.getAttribute("data-id"), id));
+    $app.querySelector("[data-action='edit-post']")?.addEventListener("click", (e) => {
+      const id = e.currentTarget.getAttribute("data-id");
+      openEditPost(id);
     });
 
-    renderCommentBox(id);
+    $app.querySelector("[data-action='delete-post']")?.addEventListener("click", (e) => {
+      const id = e.currentTarget.getAttribute("data-id");
+      doDeletePost(id);
+    });
+
+    document.getElementById("newCommentForm")?.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(ev.target);
+      const body = String(fd.get("body") || "").trim();
+
+      try {
+        await api(`/posts/${encodeURIComponent(id)}/comments`, { method: "POST", auth: true, body: { body } });
+        showFlash("Komentář přidán.", "ok");
+        location.hash = `#/post/${encodeURIComponent(id)}`;
+        route();
+      } catch (e) {
+        showFlash(e.message, "err");
+      }
+    });
+
+    // voting delegation
+    $app.querySelectorAll("[data-action='vote']").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!isAuthed()) return showFlash("Musíš se přihlásit.", "err");
+        const kind = btn.getAttribute("data-kind");
+        const id = btn.getAttribute("data-id");
+        const type = btn.getAttribute("data-type");
+        try {
+          if (kind === "post") await api(`/posts/${encodeURIComponent(id)}/reactions`, { method: "POST", auth: true, body: { type } });
+          else await api(`/comments/${encodeURIComponent(id)}/reactions`, { method: "POST", auth: true, body: { type } });
+          route();
+        } catch (e) {
+          showFlash(e.message, "err");
+        }
+      });
+    });
+
     renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
@@ -655,96 +556,55 @@ async function renderPostDetail(id) {
   }
 }
 
-function renderCommentBox(postId) {
-  const box = document.getElementById("commentBox");
-  if (!box) return;
+function renderNotFound() {
+  $app.innerHTML = `
+    <h1>404</h1>
+    <div class="card">Tahle stránka neexistuje. <a href="#/">Zpět</a></div>
+  `;
+  renderAuthUI();
+}
 
-  if (!isAuthed()) {
-    box.innerHTML = `
-      <div class="muted">Pro přidání komentáře se přihlas.</div>
-      <a class="btn btn--primary" href="#/login">Login</a>
-    `;
-    return;
-  }
+async function openEditPost(id) {
+  if (!isAuthed()) return;
 
-  box.innerHTML = `
-    <h3 style="margin-top:0">Přidat komentář</h3>
-    <form id="commentForm">
-      <textarea name="body" required minlength="2" maxlength="2000" placeholder="Komentář…"></textarea>
-      <div style="height:10px"></div>
-      <button class="btn btn--primary" type="submit">Odeslat</button>
-    </form>
+  let current = { title: "", body: "" };
+  try {
+    const wrap = await api(`/posts/${encodeURIComponent(id)}`);
+    current.title = String(wrap?.data?.title ?? "");
+    current.body = String(wrap?.data?.body ?? "");
+  } catch {}
+
+  $app.innerHTML = `
+    <div class="row" style="justify-content:space-between; align-items:flex-end;">
+      <h1>Upravit post</h1>
+      <a class="btn" href="#/">← Zpět</a>
+    </div>
+
+    <div class="card">
+      <form id="editPostForm">
+        <label class="muted">Nadpis</label>
+        <input name="title" required minlength="5" maxlength="255" value="${escapeHtml(current.title)}" />
+        <div style="height:10px"></div>
+        <label class="muted">Text</label>
+        <textarea name="body" required minlength="5" maxlength="8191">${escapeHtml(current.body)}</textarea>
+        <div style="height:10px"></div>
+        <button class="btn btn--primary" type="submit">Uložit</button>
+      </form>
+    </div>
   `;
 
-  document.getElementById("commentForm").addEventListener("submit", async (ev) => {
+  document.getElementById("editPostForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const fd = new FormData(ev.target);
+    const title = String(fd.get("title") || "").trim();
     const body = String(fd.get("body") || "").trim();
 
     try {
-      await api(`/posts/${encodeURIComponent(postId)}/comments`, { method: "POST", auth: true, body: { body } });
-      showFlash("Komentář přidán.", "ok");
-      renderPostDetail(postId);
+      await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title, body } });
+      showFlash("Uloženo.", "ok");
+      location.hash = `#/post/${encodeURIComponent(id)}`;
     } catch (e) {
       showFlash(e.message, "err");
-    }
-  });
-}
-
-// ---- Mutations (edit/delete) ----
-
-async function openEditPost(id, existingPost = null) {
-  if (!isAuthed()) return;
-
-  let post = existingPost;
-  try {
-    if (!post) {
-      const wrap = await api(`/posts/${encodeURIComponent(id)}`, { auth: isAuthed() });
-      post = wrap?.data;
-    }
-  } catch (e) {
-    showFlash(e.message, "err");
-    return;
-  }
-
-  const currentTitle = String(post?.title ?? "");
-  const currentBody = String(post?.body ?? "");
-
-  const contentHtml = `
-    <form id="modalForm" class="modal-form">
-      <label class="muted">Nadpis <span class="muted" style="font-weight:400;">(volitelné)</span></label>
-      <input name="title" type="text" maxlength="255" value="${escapeHtml(currentTitle)}" />
-      <div style="height:10px"></div>
-      <label class="muted">Text</label>
-      <textarea name="body" required minlength="1" maxlength="8191">${escapeHtml(currentBody)}</textarea>
-    </form>
-  `;
-
-  openModal({
-    title: "Upravit příspěvek",
-    contentHtml,
-    submitText: "Uložit",
-    onSubmit: async (fd) => {
-      const titleRaw = String(fd.get("title") ?? "").trim();
-      const bodyRaw = String(fd.get("body") ?? "").trim();
-      const title = titleRaw || currentTitle.trim();
-
-      if (!bodyRaw) {
-        showFlash("Text nesmí být prázdný.", "err");
-        return false;
-      }
-
-      try {
-        await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title, body: bodyRaw } });
-        showFlash("Příspěvek upraven.", "ok");
-        // refresh current view
-        if ((location.hash || "").startsWith(`#/post/${id}`)) renderPostDetail(id);
-        else renderPosts();
-        return true;
-      } catch (e) {
-        showFlash(e.message, "err");
-        return false;
-      }
     }
   });
 }
@@ -762,81 +622,7 @@ async function doDeletePost(id) {
   }
 }
 
-async function openEditComment(commentId, postId = null) {
-  if (!isAuthed()) return;
-
-  // Prefill text
-  let current = "";
-  try {
-    const wrap = await api(`/comments/${encodeURIComponent(commentId)}`);
-    current = String(wrap?.data?.body ?? "");
-  } catch { /* ignore */ }
-
-  const contentHtml = `
-    <form id="modalForm" class="modal-form">
-      <label class="muted">Text</label>
-      <textarea name="body" required minlength="1" maxlength="8191">${escapeHtml(current)}</textarea>
-    </form>
-  `;
-
-  openModal({
-    title: "Upravit komentář",
-    contentHtml,
-    submitText: "Uložit",
-    onSubmit: async (fd) => {
-      const bodyRaw = String(fd.get("body") ?? "").trim();
-      if (!bodyRaw) {
-        showFlash("Text nesmí být prázdný.", "err");
-        return false;
-      }
-
-      try {
-        await api(`/comments/${encodeURIComponent(commentId)}`, { method: "PUT", auth: true, body: { body: bodyRaw } });
-        showFlash("Komentář upraven.", "ok");
-        if (postId) renderPostDetail(postId);
-        else route();
-        return true;
-      } catch (e) {
-        showFlash(e.message, "err");
-        return false;
-      }
-    },
-  });
-}
-
-async function doDeleteComment(commentId, postId) {
-  if (!isAuthed()) return;
-  if (!confirm("Opravdu smazat komentář?")) return;
-
-  try {
-    await api(`/comments/${encodeURIComponent(commentId)}`, { method: "DELETE", auth: true });
-    showFlash("Komentář smazán.", "ok");
-    renderPostDetail(postId);
-  } catch (e) {
-    showFlash(e.message, "err");
-  }
-}
-
-function renderNotFound() {
-  $app.innerHTML = `
-    <h1>404</h1>
-    <div class="card">Tahle stránka neexistuje. <a href="#/">Zpět</a></div>
-  `;
-}
-
-// Init: pokud mám token, ověřím /auth/me (jinak token smažu)
-(async function init() {
-  renderAuthUI();
-
-  if (getToken()) {
-    try {
-      const me = await api("/auth/me", { auth: true });
-      setAuth({ token: getToken(), user: me });
-    } catch {
-      clearAuth();
-    }
-  }
-
-  renderAuthUI();
-  route();
-})();
+// init
+initCookieConsent();
+route();
+renderAuthUI();

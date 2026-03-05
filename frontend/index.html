@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Fórum Ječná</title>
-  <meta name="description" content="Fórum Ječná – školní fórum pro diskuze, příspěvky a komentáře.">
   <link rel="stylesheet" href="./styles.css" />
   <script>
     // Apply theme before first paint (prevents "flash" on load)
@@ -17,6 +16,7 @@
       } catch (e) {}
     })();
   </script>
+  <meta name="description" content="Fórum Ječná – školní fórum pro diskuze, příspěvky a komentáře.">
 </head>
 
 <body>
@@ -27,7 +27,7 @@
 
   <header class="topbar">
     <div class="wrap topbar__inner">
-      <a class="brand" href="#/"><span class="sr-only">Fórum Ječná</span></a>
+      <a class="brand" href="#/">Ječná Forum</a>
 
       <nav class="nav">
         <a class="btn nav__btn" href="#/">📰 Příspěvky</a>
@@ -53,7 +53,22 @@
 
   <footer class="wrap footer muted">
     Pokud naleznete problém napište na support: hasek@spsejecna.cz
-   • <a class="footer__link" href="#/tracking">Zdroje návštěvnosti</a></footer>
+  </footer>
+
+
+  <!-- Cookie consent (shown on first visit) -->
+  <div id="cookieBanner" class="cookie-banner" style="display:none">
+    <div class="cookie-content">
+      <div class="cookie-text">
+        <div class="cookie-title">Cookies</div>
+        <div class="cookie-desc">Používáme cookies pro analýzu návštěvnosti (UTM tracking). Můžeš je přijmout nebo odmítnout.</div>
+      </div>
+      <div class="cookie-buttons">
+        <button id="acceptCookies" class="btn btn--primary" type="button">Přijmout</button>
+        <button id="declineCookies" class="btn" type="button">Odmítnout</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="./app.js"></script>
 </body>
