@@ -8,11 +8,11 @@ const $btnLogout = document.getElementById("btnLogout");
 const $btnLoginLink = document.getElementById("btnLoginLink");
 const $btnRegisterLink = document.getElementById("btnRegisterLink");
 
-/* -------- Cookie consent + UTM tracking --------
+/* ---------------- Cookie consent + UTM tracking ----------------
    - Show banner on first visit
-   - If user accepts, store consent cookie and:
-       - store UTM values into cookies (utm_source/utm_medium/utm_campaign)
-       - POST them to backend endpoint: POST /api/v1/track (no auth, fire-and-forget)
+   - If accepted:
+     - store consent cookie
+     - if URL has utm_* → store into cookies and POST to /api/v1/track (no auth, fire-and-forget)
 */
 
 function getCookie(name) {
@@ -52,8 +52,9 @@ function readUtmFromUrl() {
     utm_campaign: params.get("utm_campaign"),
   };
   if (!utm.utm_source && !utm.utm_medium && !utm.utm_campaign) return null;
+
   Object.keys(utm).forEach((k) => {
-    if (!utm[k]) delete utm[k];
+    if (!utm[k]) delete utm[k]; // keep only present fields (all optional)
   });
   return utm;
 }
@@ -68,6 +69,7 @@ function cleanUtmFromUrl() {
     }
   });
   if (!changed) return;
+
   const qs = params.toString();
   const newUrl =
     window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
@@ -132,7 +134,7 @@ function initCookieConsent() {
   }
 }
 
-/* ---------- helpers ---------- */
+/* ---------------- Helpers ---------------- */
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -157,6 +159,52 @@ function isAuthed() {
   return Boolean(getToken());
 }
 
+function resolveAuthor(obj) {
+  return (
+    obj?.author_username ||
+    obj?.username ||
+    obj?.user?.username ||
+    obj?.author?.username ||
+    "unknown"
+  );
+}
+
+function avatarLetter(name) {
+  const s = String(name || "?").trim();
+  return (s[0] || "?").toUpperCase();
+}
+
+// Czech "před X ..."
+function timeAgo(dateString) {
+  if (!dateString) return "";
+
+  const date = new Date(dateString);
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (!Number.isFinite(diffSec) || diffSec < 0) return "";
+
+  const forms = (n, one, few, many) => {
+    if (n % 100 >= 11 && n % 100 <= 14) return many;
+    if (n % 10 === 1) return one;
+    if (n % 10 >= 2 && n % 10 <= 4) return few;
+    return many;
+  };
+
+  const units = [
+    { s: 31536000, one: "rokem", few: "roky", many: "lety" },
+    { s: 2592000, one: "měsícem", few: "měsíci", many: "měsíci" },
+    { s: 86400, one: "dnem", few: "dny", many: "dny" },
+    { s: 3600, one: "hodinou", few: "hodinami", many: "hodinami" },
+    { s: 60, one: "minutou", few: "minutami", many: "minutami" },
+  ];
+
+  for (const u of units) {
+    const n = Math.floor(diffSec / u.s);
+    if (n >= 1) return `před ${n} ${forms(n, u.one, u.few, u.many)}`;
+  }
+
+  return "před chvílí";
+}
+
 function renderAuthUI() {
   const username = getUsername();
   if (username) {
@@ -178,6 +226,8 @@ function renderAuthUI() {
   }
 }
 
+/* ---------------- Topbar actions ---------------- */
+
 document.getElementById("btnTheme")?.addEventListener("click", () => {
   const root = document.documentElement;
   const isDark = root.classList.toggle("dark");
@@ -194,7 +244,7 @@ $btnLogout?.addEventListener("click", async () => {
   showFlash("Odhlášeno.", "ok");
 });
 
-/* ---------- Router ---------- */
+/* ---------------- Router ---------------- */
 
 function route() {
   const hash = location.hash || "#/";
@@ -202,7 +252,6 @@ function route() {
   const parts = path.split("/").filter(Boolean);
   const qs = new URLSearchParams(queryString || "");
 
-  // / -> posts
   if (parts.length === 0)
     return renderPosts({ page: Number(qs.get("page") || 1) });
 
@@ -216,7 +265,32 @@ function route() {
 
 window.addEventListener("hashchange", route);
 
-// -------- Views --------
+/* ---------------- Voting (shared handler) ---------------- */
+
+async function handleVoteClick({ kind, id, type, rerender }) {
+  if (!isAuthed()) return showFlash("Musíš se přihlásit.", "err");
+
+  try {
+    if (kind === "post") {
+      await api(`/posts/${encodeURIComponent(id)}/reactions`, {
+        method: "POST",
+        auth: true,
+        body: { type },
+      });
+    } else {
+      await api(`/comments/${encodeURIComponent(id)}/reactions`, {
+        method: "POST",
+        auth: true,
+        body: { type },
+      });
+    }
+    await rerender();
+  } catch (e) {
+    showFlash(e.message, "err");
+  }
+}
+
+/* ---------------- Views ---------------- */
 
 async function renderPosts({ page = 1 } = {}) {
   $app.innerHTML = `
@@ -235,6 +309,7 @@ async function renderPosts({ page = 1 } = {}) {
       `/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`,
       { auth: isAuthed() }
     );
+
     const posts = payload?.data ?? [];
     const meta = payload?.meta ?? {};
 
@@ -268,12 +343,7 @@ async function renderPosts({ page = 1 } = {}) {
         ${posts
           .map((p) => {
             const ur = p.user_reaction;
-            const author =
-              p.author_username ||
-              p.username ||
-              p.user?.username ||
-              p.author?.username ||
-              "unknown";
+            const author = resolveAuthor(p);
 
             return `
             <div class="card">
@@ -284,26 +354,34 @@ async function renderPosts({ page = 1 } = {}) {
                   )}" style="text-decoration:none; color:inherit;">
                     <h2 style="margin:0 0 6px 0">${escapeHtml(p.title)}</h2>
                   </a>
-                  <div class="muted">autor: <b>${escapeHtml(
-                    author
-                  )}</b> • ${timeAgo(p.created_at || "")}</div>
+
+                  <div class="metaRow">
+                    <div class="userMeta">
+                      <div class="avatar">${escapeHtml(avatarLetter(author))}</div>
+                      <div class="muted">autor: <b>${escapeHtml(author)}</b></div>
+                    </div>
+                    <div class="muted">• ${escapeHtml(timeAgo(p.created_at))}</div>
+                  </div>
                 </div>
 
                 <div class="pill--votes" title="Hlasování">
-                  <button class="voteBtn ${
-                    ur === "upvote" ? "activeUp" : ""
-                  }" data-action="vote" data-kind="post" data-id="${escapeHtml(
-              p.id
-            )}" data-type="upvote">⬆</button>
+                  <button class="voteBtn up ${ur === "upvote" ? "active" : ""}"
+                    data-action="vote" data-kind="post" data-id="${escapeHtml(
+                      p.id
+                    )}" data-type="upvote"
+                    aria-label="Upvote">▲</button>
+
                   <span class="voteCount">${Number(p.upvotes_count ?? 0)}</span>
-                  <button class="voteBtn ${
-                    ur === "downvote" ? "activeUp" : ""
-                  }" data-action="vote" data-kind="post" data-id="${escapeHtml(
-              p.id
-            )}" data-type="downvote">⬇</button>
-                  <span class="voteCount">${Number(
-                    p.downvotes_count ?? 0
-                  )}</span>
+
+                  <button class="voteBtn down ${
+                    ur === "downvote" ? "active" : ""
+                  }"
+                    data-action="vote" data-kind="post" data-id="${escapeHtml(
+                      p.id
+                    )}" data-type="downvote"
+                    aria-label="Downvote">▼</button>
+
+                  <span class="voteCount">${Number(p.downvotes_count ?? 0)}</span>
                 </div>
               </div>
 
@@ -340,45 +418,32 @@ async function renderPosts({ page = 1 } = {}) {
         openEditPost(btn.getAttribute("data-id"))
       );
     });
+
     $app.querySelectorAll("[data-action='delete-post']").forEach((btn) => {
       btn.addEventListener("click", () =>
         doDeletePost(btn.getAttribute("data-id"))
       );
     });
-    // voting (posts list)
-$app.querySelectorAll("[data-action='vote']").forEach((btn) => {
-  btn.addEventListener("click", async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
 
-    if (!isAuthed()) return showFlash("Musíš se přihlásit.", "err");
+    // voting in list (this was the missing piece!)
+    $app.querySelectorAll("[data-action='vote']").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
 
-    const kind = btn.getAttribute("data-kind"); // "post"
-    const id = btn.getAttribute("data-id");
-    const type = btn.getAttribute("data-type"); // "upvote" | "downvote"
+        const kind = btn.getAttribute("data-kind");
+        const id = btn.getAttribute("data-id");
+        const type = btn.getAttribute("data-type");
 
-    try {
-      if (kind === "post") {
-        await api(`/posts/${encodeURIComponent(id)}/reactions`, {
-          method: "POST",
-          auth: true,
-          body: { type },
+        await handleVoteClick({
+          kind,
+          id,
+          type,
+          rerender: () => renderPosts({ page }),
         });
-      } else {
-        await api(`/comments/${encodeURIComponent(id)}/reactions`, {
-          method: "POST",
-          auth: true,
-          body: { type },
-        });
-      }
+      });
+    });
 
-      // refresh list to show new counts + active state
-      await renderPosts({ page });
-    } catch (err) {
-      showFlash(err.message, "err");
-    }
-  });
-});
     renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(
@@ -407,21 +472,11 @@ function renderLogin() {
             placeholder="vložit heslo"
           />
 
-          <button
-            class="btn pwReveal__btn"
-            type="button"
-            id="btnToggleLoginPw"
-            aria-label="Ukázat/skrýt heslo"
-          >
+          <button class="btn pwReveal__btn" type="button" id="btnToggleLoginPw" aria-label="Ukázat/skrýt heslo">
             👁️
           </button>
 
-          <button
-            class="btn pwReveal__btn"
-            type="button"
-            id="btnCopyLoginPw"
-            aria-label="Kopírovat heslo"
-          >
+          <button class="btn pwReveal__btn" type="button" id="btnCopyLoginPw" aria-label="Kopírovat heslo">
             📋
           </button>
         </div>
@@ -466,10 +521,7 @@ function renderLogin() {
         body: { password },
       });
 
-      setAuth({
-        token: data.token,
-        user: data.user,
-      });
+      setAuth({ token: data.token, user: data.user });
 
       renderAuthUI();
       showFlash("Přihlášení OK.", "ok");
@@ -515,17 +567,22 @@ function renderRegister() {
         <h1>Hotovo ✅</h1>
         <div class="card">
           <p><b>Tohle heslo uvidíš jen jednou.</b> Ulož si ho (např. do správce hesel).</p>
+
           <div class="card" style="background:rgba(0,0,0,.04); border:1px dashed rgba(0,0,0,.25)">
             <div class="muted">Tvůj tajný klíč (password)</div>
+
             <div class="pwReveal">
               <input id="generatedPassword" class="pwReveal__input" type="password" readonly value="${escapeHtml(
                 data.password
               )}" />
+
               <button class="btn pwReveal__btn" type="button" id="btnTogglePw" aria-label="Ukázat/skrýt heslo">👁️</button>
               <button class="btn pwReveal__btn" type="button" id="btnCopyPw" aria-label="Kopírovat heslo">📋</button>
             </div>
+
             <div class="muted" style="margin-top:8px;">Tip: klikni na 👁️ pro zobrazení nebo na 📋 pro zkopírování.</div>
           </div>
+
           <div class="row" style="gap:8px; margin-top:12px; flex-wrap:wrap;">
             <a class="btn btn--primary" href="#/">Pokračovat na posty</a>
             <a class="btn" href="#/login">Přejít na login</a>
@@ -556,6 +613,7 @@ function renderRegister() {
         }
       });
 
+      // optionally refresh auth/me if backend supports
       try {
         const me = await api("/auth/me", { auth: true });
         setAuth({ token: getToken(), user: me });
@@ -629,38 +687,34 @@ async function renderPostDetail(id) {
     const comments = commentsWrap?.data ?? [];
 
     const ur = p?.user_reaction;
-    const author =
-      p?.author_username ||
-      p?.username ||
-      p?.user?.username ||
-      p?.author?.username ||
-      "unknown";
+    const author = resolveAuthor(p);
 
     $app.innerHTML = `
       <div class="row" style="justify-content:space-between; align-items:flex-end;">
         <a class="btn" href="#/">← Zpět</a>
+
         <div class="pill--votes" title="Hlasování">
-          <button class="voteBtn ${
-            ur === "upvote" ? "is-active" : ""
-          }" data-action="vote" data-kind="post" data-id="${escapeHtml(
-      p.id
-    )}" data-type="upvote">⬆</button>
+          <button class="voteBtn up ${ur === "upvote" ? "active" : ""}"
+            data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="upvote">▲</button>
           <span class="voteCount">${Number(p.upvotes_count ?? 0)}</span>
-          <button class="voteBtn ${
-            ur === "downvote" ? "is-active" : ""
-          }" data-action="vote" data-kind="post" data-id="${escapeHtml(
-      p.id
-    )}" data-type="downvote">⬇</button>
+
+          <button class="voteBtn down ${ur === "downvote" ? "active" : ""}"
+            data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="downvote">▼</button>
           <span class="voteCount">${Number(p.downvotes_count ?? 0)}</span>
         </div>
       </div>
 
       <div class="card" style="margin-top:12px;">
         <h1 style="margin-top:0">${escapeHtml(p.title)}</h1>
-        <div class="author">
-        <div class="avatar">${author.charAt(0).toUpperCase()}</div>
-        <div class="authorName">${escapeHtml(author)}</div>
+
+        <div class="metaRow">
+          <div class="userMeta">
+            <div class="avatar">${escapeHtml(avatarLetter(author))}</div>
+            <div class="muted">autor: <b>${escapeHtml(author)}</b></div>
+          </div>
+          <div class="muted">• ${escapeHtml(timeAgo(p.created_at))}</div>
         </div>
+
         <div style="margin-top:12px; white-space:pre-wrap;">${escapeHtml(
           p.body || ""
         )}</div>
@@ -689,38 +743,40 @@ async function renderPostDetail(id) {
             ? comments
                 .map((c) => {
                   const cur = c.user_reaction;
-                  const cauthor =
-                    c.author_username ||
-                    c.username ||
-                    c.user?.username ||
-                    c.author?.username ||
-                    "unknown";
+                  const cauthor = resolveAuthor(c);
 
                   return `
             <div class="card" style="margin-top:10px;">
               <div class="row" style="justify-content:space-between; align-items:flex-start;">
                 <div>
-                  <div class="muted">autor: <b>${escapeHtml(
-                    cauthor
-                  )}</b> • ${escapeHtml(c.created_at || "")}</div>
+                  <div class="metaRow">
+                    <div class="userMeta">
+                      <div class="avatar">${escapeHtml(
+                        avatarLetter(cauthor)
+                      )}</div>
+                      <div class="muted">autor: <b>${escapeHtml(cauthor)}</b></div>
+                    </div>
+                    <div class="muted">• ${escapeHtml(timeAgo(c.created_at))}</div>
+                  </div>
                 </div>
+
                 <div class="pill--votes" title="Hlasování">
-                  <button class="voteBtn ${
-                    cur === "upvote" ? "is-active" : ""
+                  <button class="voteBtn up ${
+                    cur === "upvote" ? "active" : ""
                   }" data-action="vote" data-kind="comment" data-id="${escapeHtml(
                     c.id
-                  )}" data-type="upvote">⬆</button>
+                  )}" data-type="upvote">▲</button>
                   <span class="voteCount">${Number(c.upvotes_count ?? 0)}</span>
-                  <button class="voteBtn ${
-                    cur === "downvote" ? "is-active" : ""
+
+                  <button class="voteBtn down ${
+                    cur === "downvote" ? "active" : ""
                   }" data-action="vote" data-kind="comment" data-id="${escapeHtml(
                     c.id
-                  )}" data-type="downvote">⬇</button>
-                  <span class="voteCount">${Number(
-                    c.downvotes_count ?? 0
-                  )}</span>
+                  )}" data-type="downvote">▼</button>
+                  <span class="voteCount">${Number(c.downvotes_count ?? 0)}</span>
                 </div>
               </div>
+
               <div style="margin-top:10px; white-space:pre-wrap;">${escapeHtml(
                 c.body || ""
               )}</div>
@@ -747,73 +803,58 @@ async function renderPostDetail(id) {
       </div>
     `;
 
-    $app
-      .querySelector("[data-action='edit-post']")
-      ?.addEventListener("click", (e) => {
-        const id = e.currentTarget.getAttribute("data-id");
-        openEditPost(id);
-      });
+    // edit/delete
+    $app.querySelector("[data-action='edit-post']")?.addEventListener("click", (e) => {
+      const pid = e.currentTarget.getAttribute("data-id");
+      openEditPost(pid);
+    });
 
-    $app
-      .querySelector("[data-action='delete-post']")
-      ?.addEventListener("click", (e) => {
-        const id = e.currentTarget.getAttribute("data-id");
-        doDeletePost(id);
-      });
+    $app.querySelector("[data-action='delete-post']")?.addEventListener("click", (e) => {
+      const pid = e.currentTarget.getAttribute("data-id");
+      doDeletePost(pid);
+    });
 
-    document
-      .getElementById("newCommentForm")
-      ?.addEventListener("submit", async (ev) => {
-        ev.preventDefault();
-        const fd = new FormData(ev.target);
-        const body = String(fd.get("body") || "").trim();
+    // new comment
+    document.getElementById("newCommentForm")?.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(ev.target);
+      const body = String(fd.get("body") || "").trim();
 
-        try {
-          await api(`/posts/${encodeURIComponent(id)}/comments`, {
-            method: "POST",
-            auth: true,
-            body: { body },
-          });
-          showFlash("Komentář přidán.", "ok");
-          location.hash = `#/post/${encodeURIComponent(id)}`;
-          route();
-        } catch (e) {
-          showFlash(e.message, "err");
-        }
-      });
+      try {
+        await api(`/posts/${encodeURIComponent(id)}/comments`, {
+          method: "POST",
+          auth: true,
+          body: { body },
+        });
+        showFlash("Komentář přidán.", "ok");
+        await renderPostDetail(id);
+      } catch (e) {
+        showFlash(e.message, "err");
+      }
+    });
 
-    // voting delegation
+    // voting in detail
     $app.querySelectorAll("[data-action='vote']").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (!isAuthed()) return showFlash("Musíš se přihlásit.", "err");
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
         const kind = btn.getAttribute("data-kind");
-        const id = btn.getAttribute("data-id");
+        const rid = btn.getAttribute("data-id");
         const type = btn.getAttribute("data-type");
-        try {
-          if (kind === "post")
-            await api(`/posts/${encodeURIComponent(id)}/reactions`, {
-              method: "POST",
-              auth: true,
-              body: { type },
-            });
-          else
-            await api(`/comments/${encodeURIComponent(id)}/reactions`, {
-              method: "POST",
-              auth: true,
-              body: { type },
-            });
-          route();
-        } catch (e) {
-          showFlash(e.message, "err");
-        }
+
+        await handleVoteClick({
+          kind,
+          id: rid,
+          type,
+          rerender: () => renderPostDetail(id),
+        });
       });
     });
 
     renderAuthUI();
   } catch (e) {
-    $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(
-      e.message
-    )}</b></div>`;
+    $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
     renderAuthUI();
   }
 }
@@ -859,26 +900,24 @@ async function openEditPost(id) {
     </div>
   `;
 
-  document
-    .getElementById("editPostForm")
-    .addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const fd = new FormData(ev.target);
-      const title = String(fd.get("title") || "").trim();
-      const body = String(fd.get("body") || "").trim();
+  document.getElementById("editPostForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const fd = new FormData(ev.target);
+    const title = String(fd.get("title") || "").trim();
+    const body = String(fd.get("body") || "").trim();
 
-      try {
-        await api(`/posts/${encodeURIComponent(id)}`, {
-          method: "PUT",
-          auth: true,
-          body: { title, body },
-        });
-        showFlash("Uloženo.", "ok");
-        location.hash = `#/post/${encodeURIComponent(id)}`;
-      } catch (e) {
-        showFlash(e.message, "err");
-      }
-    });
+    try {
+      await api(`/posts/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        auth: true,
+        body: { title, body },
+      });
+      showFlash("Uloženo.", "ok");
+      location.hash = `#/post/${encodeURIComponent(id)}`;
+    } catch (e) {
+      showFlash(e.message, "err");
+    }
+  });
 }
 
 async function doDeletePost(id) {
@@ -896,38 +935,8 @@ async function doDeletePost(id) {
     showFlash(e.message, "err");
   }
 }
-function timeAgo(dateString) {
-  if (!dateString) return "";
 
-  const date = new Date(dateString);
-  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (!Number.isFinite(diffSec) || diffSec < 0) return "";
-
-  const forms = (n, one, few, many) => {
-    // 11–14 jsou vždy "many"
-    if (n % 100 >= 11 && n % 100 <= 14) return many;
-    if (n % 10 === 1) return one;
-    if (n % 10 >= 2 && n % 10 <= 4) return few;
-    return many;
-  };
-
-  const units = [
-    { s: 31536000, one: "rokem",   few: "roky",   many: "lety" },   // před 1 rokem / před 2 roky / před 5 lety
-    { s: 2592000,  one: "měsícem", few: "měsíci", many: "měsíci" }, // ok pro běžné použití
-    { s: 86400,    one: "dnem",    few: "dny",    many: "dny" },
-    { s: 3600,     one: "hodinou", few: "hodinami", many: "hodinami" },
-    { s: 60,       one: "minutou", few: "minutami", many: "minutami" },
-  ];
-
-  for (const u of units) {
-    const n = Math.floor(diffSec / u.s);
-    if (n >= 1) return `před ${n} ${forms(n, u.one, u.few, u.many)}`;
-  }
-
-  return "před chvílí";
-}
-
-// init
+/* ---------------- init ---------------- */
 initCookieConsent();
 route();
 renderAuthUI();
