@@ -710,7 +710,7 @@ async function renderPostDetail(id) {
         <div class="metaRow">
           <div class="userMeta">
             <div class="avatar">${escapeHtml(avatarLetter(author))}</div>
-            <div class="muted">autor: <b>${escapeHtml(author)}</b></div>
+            <div class="muted" <b>${escapeHtml(author)}</b></div>
           </div>
           <div class="muted">• ${escapeHtml(timeAgo(p.created_at))}</div>
         </div>
