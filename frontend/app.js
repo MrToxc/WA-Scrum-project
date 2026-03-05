@@ -286,7 +286,7 @@ async function renderPosts({ page = 1 } = {}) {
                   </a>
                   <div class="muted">autor: <b>${escapeHtml(
                     author
-                  )}</b> • ${timeAgo(p.created_at)}|| "")}</div>
+                  )}</b> • ${timeAgo(p.created_at || "")}</div>
                 </div>
 
                 <div class="pill--votes" title="Hlasování">
@@ -345,7 +345,40 @@ async function renderPosts({ page = 1 } = {}) {
         doDeletePost(btn.getAttribute("data-id"))
       );
     });
+    // voting (posts list)
+$app.querySelectorAll("[data-action='vote']").forEach((btn) => {
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
 
+    if (!isAuthed()) return showFlash("Musíš se přihlásit.", "err");
+
+    const kind = btn.getAttribute("data-kind"); // "post"
+    const id = btn.getAttribute("data-id");
+    const type = btn.getAttribute("data-type"); // "upvote" | "downvote"
+
+    try {
+      if (kind === "post") {
+        await api(`/posts/${encodeURIComponent(id)}/reactions`, {
+          method: "POST",
+          auth: true,
+          body: { type },
+        });
+      } else {
+        await api(`/comments/${encodeURIComponent(id)}/reactions`, {
+          method: "POST",
+          auth: true,
+          body: { type },
+        });
+      }
+
+      // refresh list to show new counts + active state
+      await renderPosts({ page });
+    } catch (err) {
+      showFlash(err.message, "err");
+    }
+  });
+});
     renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(
