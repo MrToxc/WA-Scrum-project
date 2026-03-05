@@ -16,12 +16,20 @@ const $btnRegisterLink = document.getElementById("btnRegisterLink");
 */
 
 function getCookie(name) {
-  const m = document.cookie.match(new RegExp("(?:^|; )" + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)"));
+  const m = document.cookie.match(
+    new RegExp(
+      "(?:^|; )" +
+        name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, "\\$1") +
+        "=([^;]*)"
+    )
+  );
   return m ? decodeURIComponent(m[1]) : null;
 }
 
 function setCookie(name, value, maxAgeSeconds = 60 * 60 * 24 * 365) {
-  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}`;
+  document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(
+    value
+  )}; path=/; max-age=${maxAgeSeconds}`;
 }
 
 function showCookieBanner() {
@@ -44,19 +52,25 @@ function readUtmFromUrl() {
     utm_campaign: params.get("utm_campaign"),
   };
   if (!utm.utm_source && !utm.utm_medium && !utm.utm_campaign) return null;
-  Object.keys(utm).forEach(k => { if (!utm[k]) delete utm[k]; });
+  Object.keys(utm).forEach((k) => {
+    if (!utm[k]) delete utm[k];
+  });
   return utm;
 }
 
 function cleanUtmFromUrl() {
   const params = new URLSearchParams(window.location.search || "");
   let changed = false;
-  ["utm_source", "utm_medium", "utm_campaign"].forEach(k => {
-    if (params.has(k)) { params.delete(k); changed = true; }
+  ["utm_source", "utm_medium", "utm_campaign"].forEach((k) => {
+    if (params.has(k)) {
+      params.delete(k);
+      changed = true;
+    }
   });
   if (!changed) return;
   const qs = params.toString();
-  const newUrl = window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
+  const newUrl =
+    window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
   history.replaceState(null, "", newUrl);
 }
 
@@ -76,6 +90,7 @@ function sendUtmToBackend(utm) {
 }
 
 function maybeTrackUtm() {
+  // prevent spamming on refresh within same session
   if (sessionStorage.getItem("utm_sent") === "1") return;
 
   const utm = readUtmFromUrl();
@@ -110,6 +125,7 @@ function initCookieConsent() {
     return;
   }
 
+  // already decided
   hideCookieBanner();
   if (consent === "accepted") {
     maybeTrackUtm();
@@ -132,7 +148,9 @@ function showFlash(msg, type = "ok") {
   $flash.className = "flash " + (type === "err" ? "flash--err" : "flash--ok");
   $flash.textContent = msg;
   $flash.style.display = "block";
-  setTimeout(() => { $flash.style.display = "none"; }, 3000);
+  setTimeout(() => {
+    $flash.style.display = "none";
+  }, 3000);
 }
 
 function isAuthed() {
@@ -146,13 +164,17 @@ function renderAuthUI() {
     $btnLogout.style.display = "inline-flex";
     $btnLoginLink.style.display = "none";
     $btnRegisterLink.style.display = "none";
-    document.querySelectorAll(".auth-only").forEach(el => el.style.display = "inline-flex");
+    document
+      .querySelectorAll(".auth-only")
+      .forEach((el) => (el.style.display = "inline-flex"));
   } else {
     $authStatus.textContent = "Nepřihlášen";
     $btnLogout.style.display = "none";
     $btnLoginLink.style.display = "inline-flex";
     $btnRegisterLink.style.display = "inline-flex";
-    document.querySelectorAll(".auth-only").forEach(el => el.style.display = "none");
+    document
+      .querySelectorAll(".auth-only")
+      .forEach((el) => (el.style.display = "none"));
   }
 }
 
@@ -163,7 +185,9 @@ document.getElementById("btnTheme")?.addEventListener("click", () => {
 });
 
 $btnLogout?.addEventListener("click", async () => {
-  try { await api("/auth/logout", { method: "POST", auth: true }); } catch {}
+  try {
+    await api("/auth/logout", { method: "POST", auth: true });
+  } catch {}
   clearAuth();
   renderAuthUI();
   location.hash = "#/login";
@@ -179,7 +203,8 @@ function route() {
   const qs = new URLSearchParams(queryString || "");
 
   // / -> posts
-  if (parts.length === 0) return renderPosts({ page: Number(qs.get("page") || 1) });
+  if (parts.length === 0)
+    return renderPosts({ page: Number(qs.get("page") || 1) });
 
   if (parts[0] === "login") return renderLogin();
   if (parts[0] === "register") return renderRegister();
@@ -206,7 +231,10 @@ async function renderPosts({ page = 1 } = {}) {
 
   try {
     const perPage = 10;
-    const payload = await api(`/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`, { auth: isAuthed() });
+    const payload = await api(
+      `/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`,
+      { auth: isAuthed() }
+    );
     const posts = payload?.data ?? [];
     const meta = payload?.meta ?? {};
 
@@ -221,61 +249,108 @@ async function renderPosts({ page = 1 } = {}) {
 
     const pager = `
       <div class="row" style="justify-content:space-between; margin-top:12px;">
-        <a class="btn" href="#/?page=${Math.max(1, (meta.current_page || 1) - 1)}">← Předchozí</a>
-        <div class="muted">Strana ${(meta.current_page || 1)} / ${(meta.last_page || 1)}</div>
-        <a class="btn" href="#/?page=${Math.min((meta.last_page || 1), (meta.current_page || 1) + 1)}">Další →</a>
+        <a class="btn" href="#/?page=${Math.max(
+          1,
+          (meta.current_page || 1) - 1
+        )}">← Předchozí</a>
+        <div class="muted">Strana ${(meta.current_page || 1)} / ${
+      meta.last_page || 1
+    }</div>
+        <a class="btn" href="#/?page=${Math.min(
+          meta.last_page || 1,
+          (meta.current_page || 1) + 1
+        )}">Další →</a>
       </div>
     `;
 
     $app.innerHTML = `
       <div class="list">
-        ${posts.map(p => {
-          const ur = p.user_reaction;
-          return `
+        ${posts
+          .map((p) => {
+            const ur = p.user_reaction;
+            const author =
+              p.author_username ||
+              p.username ||
+              p.user?.username ||
+              p.author?.username ||
+              "unknown";
+
+            return `
             <div class="card">
               <div class="row" style="justify-content:space-between; align-items:flex-start;">
                 <div style="flex:1">
-                  <a href="#/post/${encodeURIComponent(p.id)}" style="text-decoration:none; color:inherit;">
+                  <a href="#/post/${encodeURIComponent(
+                    p.id
+                  )}" style="text-decoration:none; color:inherit;">
                     <h2 style="margin:0 0 6px 0">${escapeHtml(p.title)}</h2>
                   </a>
-                  <div class="muted">autor: <b>${escapeHtml(p.author_username || "unknown")}</b> • ${escapeHtml(p.created_at || "")}</div>
+                  <div class="muted">autor: <b>${escapeHtml(
+                    author
+                  )}</b> • ${escapeHtml(p.created_at || "")}</div>
                 </div>
 
                 <div class="pill--votes" title="Hlasování">
-                  <button class="voteBtn ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="upvote">▲</button>
+                  <button class="voteBtn ${
+                    ur === "upvote" ? "is-active" : ""
+                  }" data-action="vote" data-kind="post" data-id="${escapeHtml(
+              p.id
+            )}" data-type="upvote">▲</button>
                   <span class="voteCount">${Number(p.upvotes_count ?? 0)}</span>
-                  <button class="voteBtn ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="downvote">▼</button>
-                  <span class="voteCount">${Number(p.downvotes_count ?? 0)}</span>
+                  <button class="voteBtn ${
+                    ur === "downvote" ? "is-active" : ""
+                  }" data-action="vote" data-kind="post" data-id="${escapeHtml(
+              p.id
+            )}" data-type="downvote">▼</button>
+                  <span class="voteCount">${Number(
+                    p.downvotes_count ?? 0
+                  )}</span>
                 </div>
               </div>
 
-              <div style="margin-top:10px; white-space:pre-wrap;">${escapeHtml(p.body || "")}</div>
+              <div style="margin-top:10px; white-space:pre-wrap;">${escapeHtml(
+                p.body || ""
+              )}</div>
 
-              ${(isAuthed() && (Number(getUserId()) === Number(p.user_id))) ? `
+              ${
+                isAuthed() && Number(getUserId()) === Number(p.user_id)
+                  ? `
                 <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
-                  <button class="btn" data-action="edit-post" data-id="${escapeHtml(p.id)}">Upravit</button>
-                  <button class="btn btn--danger" data-action="delete-post" data-id="${escapeHtml(p.id)}">Smazat</button>
+                  <button class="btn" data-action="edit-post" data-id="${escapeHtml(
+                    p.id
+                  )}">Upravit</button>
+                  <button class="btn btn--danger" data-action="delete-post" data-id="${escapeHtml(
+                    p.id
+                  )}">Smazat</button>
                 </div>
-              ` : ""}
+              `
+                  : ""
+              }
             </div>
           `;
-        }).join("")}
+          })
+          .join("")}
       </div>
 
       ${pager}
     `;
 
     // bind edit/delete
-    $app.querySelectorAll("[data-action='edit-post']").forEach(btn => {
-      btn.addEventListener("click", () => openEditPost(btn.getAttribute("data-id")));
+    $app.querySelectorAll("[data-action='edit-post']").forEach((btn) => {
+      btn.addEventListener("click", () =>
+        openEditPost(btn.getAttribute("data-id"))
+      );
     });
-    $app.querySelectorAll("[data-action='delete-post']").forEach(btn => {
-      btn.addEventListener("click", () => doDeletePost(btn.getAttribute("data-id")));
+    $app.querySelectorAll("[data-action='delete-post']").forEach((btn) => {
+      btn.addEventListener("click", () =>
+        doDeletePost(btn.getAttribute("data-id"))
+      );
     });
 
     renderAuthUI();
   } catch (e) {
-    $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
+    $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(
+      e.message
+    )}</b></div>`;
     renderAuthUI();
   }
 }
@@ -285,22 +360,84 @@ function renderLogin() {
     <h1>Login</h1>
     <div class="card">
       <form id="loginForm">
+
         <label class="muted">Heslo (to vygenerované při registraci)</label>
-        <input name="password" required minlength="3" placeholder="vložit heslo" />
+
+        <div class="pwReveal">
+          <input
+            id="loginPassword"
+            class="pwReveal__input"
+            type="password"
+            name="password"
+            required
+            minlength="3"
+            placeholder="vložit heslo"
+          />
+
+          <button
+            class="btn pwReveal__btn"
+            type="button"
+            id="btnToggleLoginPw"
+            aria-label="Ukázat/skrýt heslo"
+          >
+            👁️
+          </button>
+
+          <button
+            class="btn pwReveal__btn"
+            type="button"
+            id="btnCopyLoginPw"
+            aria-label="Kopírovat heslo"
+          >
+            📋
+          </button>
+        </div>
+
         <div style="height:10px"></div>
-        <button class="btn btn--primary" type="submit">Přihlásit</button>
+
+        <button class="btn btn--primary" type="submit">
+          Přihlásit
+        </button>
+
       </form>
     </div>
   `;
 
+  const pwInput = document.getElementById("loginPassword");
+  const btnToggle = document.getElementById("btnToggleLoginPw");
+  const btnCopy = document.getElementById("btnCopyLoginPw");
+
+  btnToggle?.addEventListener("click", () => {
+    pwInput.type = pwInput.type === "password" ? "text" : "password";
+  });
+
+  btnCopy?.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(pwInput.value);
+      showFlash("Heslo zkopírováno.", "ok");
+    } catch {
+      pwInput.select();
+      document.execCommand("copy");
+      showFlash("Heslo zkopírováno.", "ok");
+    }
+  });
+
   document.getElementById("loginForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const fd = new FormData(ev.target);
-    const password = String(fd.get("password") || "").trim();
+
+    const password = pwInput.value.trim();
 
     try {
-      const data = await api("/auth/login", { method: "POST", body: { password } });
-      setAuth({ token: data.token, user: data.user });
+      const data = await api("/auth/login", {
+        method: "POST",
+        body: { password },
+      });
+
+      setAuth({
+        token: data.token,
+        user: data.user,
+      });
+
       renderAuthUI();
       showFlash("Přihlášení OK.", "ok");
       location.hash = "#/";
@@ -333,7 +470,10 @@ function renderRegister() {
     const username = String(fd.get("username") || "").trim();
 
     try {
-      const data = await api("/auth/register", { method: "POST", body: { username } });
+      const data = await api("/auth/register", {
+        method: "POST",
+        body: { username },
+      });
 
       setAuth({ token: data.token, user: { id: null, username: data.username } });
       renderAuthUI();
@@ -345,7 +485,9 @@ function renderRegister() {
           <div class="card" style="background:rgba(0,0,0,.04); border:1px dashed rgba(0,0,0,.25)">
             <div class="muted">Tvůj tajný klíč (password)</div>
             <div class="pwReveal">
-              <input id="generatedPassword" class="pwReveal__input" type="password" readonly value="${escapeHtml(data.password)}" />
+              <input id="generatedPassword" class="pwReveal__input" type="password" readonly value="${escapeHtml(
+                data.password
+              )}" />
               <button class="btn pwReveal__btn" type="button" id="btnTogglePw" aria-label="Ukázat/skrýt heslo">👁️</button>
               <button class="btn pwReveal__btn" type="button" id="btnCopyPw" aria-label="Kopírovat heslo">📋</button>
             </div>
@@ -386,7 +528,6 @@ function renderRegister() {
         setAuth({ token: getToken(), user: me });
         renderAuthUI();
       } catch {}
-
     } catch (e) {
       showFlash(e.message, "err");
     }
@@ -426,7 +567,11 @@ function renderNewPost() {
     const body = String(fd.get("body") || "").trim();
 
     try {
-      const created = await api("/posts", { method: "POST", auth: true, body: { title, body } });
+      const created = await api("/posts", {
+        method: "POST",
+        auth: true,
+        body: { title, body },
+      });
       const id = created?.data?.id;
       location.hash = id ? `#/post/${encodeURIComponent(id)}` : "#/";
       showFlash("Příspěvek vytvořen.", "ok");
@@ -440,62 +585,121 @@ async function renderPostDetail(id) {
   $app.innerHTML = `<div class="card muted">Načítám…</div>`;
 
   try {
-    const postWrap = await api(`/posts/${encodeURIComponent(id)}`, { auth: isAuthed() });
+    const postWrap = await api(`/posts/${encodeURIComponent(id)}`, {
+      auth: isAuthed(),
+    });
     const p = postWrap?.data;
 
-    const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments`, { auth: isAuthed() });
+    const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments`, {
+      auth: isAuthed(),
+    });
     const comments = commentsWrap?.data ?? [];
 
     const ur = p?.user_reaction;
+    const author =
+      p?.author_username ||
+      p?.username ||
+      p?.user?.username ||
+      p?.author?.username ||
+      "unknown";
 
     $app.innerHTML = `
       <div class="row" style="justify-content:space-between; align-items:flex-end;">
         <a class="btn" href="#/">← Zpět</a>
         <div class="pill--votes" title="Hlasování">
-          <button class="voteBtn ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="upvote">▲</button>
+          <button class="voteBtn ${
+            ur === "upvote" ? "is-active" : ""
+          }" data-action="vote" data-kind="post" data-id="${escapeHtml(
+      p.id
+    )}" data-type="upvote">▲</button>
           <span class="voteCount">${Number(p.upvotes_count ?? 0)}</span>
-          <button class="voteBtn ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="post" data-id="${escapeHtml(p.id)}" data-type="downvote">▼</button>
+          <button class="voteBtn ${
+            ur === "downvote" ? "is-active" : ""
+          }" data-action="vote" data-kind="post" data-id="${escapeHtml(
+      p.id
+    )}" data-type="downvote">▼</button>
           <span class="voteCount">${Number(p.downvotes_count ?? 0)}</span>
         </div>
       </div>
 
       <div class="card" style="margin-top:12px;">
         <h1 style="margin-top:0">${escapeHtml(p.title)}</h1>
-        <div class="muted">autor: <b>${escapeHtml(p.author_username || "unknown")}</b> • ${escapeHtml(p.created_at || "")}</div>
-        <div style="margin-top:12px; white-space:pre-wrap;">${escapeHtml(p.body || "")}</div>
+        <div class="muted">autor: <b>${escapeHtml(author)}</b> • ${escapeHtml(
+      p.created_at || ""
+    )}</div>
+        <div style="margin-top:12px; white-space:pre-wrap;">${escapeHtml(
+          p.body || ""
+        )}</div>
 
-        ${(isAuthed() && (Number(getUserId()) === Number(p.user_id))) ? `
+        ${
+          isAuthed() && Number(getUserId()) === Number(p.user_id)
+            ? `
           <div class="row" style="justify-content:flex-end; margin-top:10px; gap:8px;">
-            <button class="btn" data-action="edit-post" data-id="${escapeHtml(p.id)}">Upravit</button>
-            <button class="btn btn--danger" data-action="delete-post" data-id="${escapeHtml(p.id)}">Smazat</button>
+            <button class="btn" data-action="edit-post" data-id="${escapeHtml(
+              p.id
+            )}">Upravit</button>
+            <button class="btn btn--danger" data-action="delete-post" data-id="${escapeHtml(
+              p.id
+            )}">Smazat</button>
           </div>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
 
       <div class="card" style="margin-top:12px;">
         <h2 style="margin-top:0">Komentáře</h2>
 
-        ${comments.length ? comments.map(c => {
-          const cur = c.user_reaction;
-          return `
+        ${
+          comments.length
+            ? comments
+                .map((c) => {
+                  const cur = c.user_reaction;
+                  const cauthor =
+                    c.author_username ||
+                    c.username ||
+                    c.user?.username ||
+                    c.author?.username ||
+                    "unknown";
+
+                  return `
             <div class="card" style="margin-top:10px;">
               <div class="row" style="justify-content:space-between; align-items:flex-start;">
                 <div>
-                  <div class="muted">autor: <b>${escapeHtml(c.author_username || "unknown")}</b> • ${escapeHtml(c.created_at || "")}</div>
+                  <div class="muted">autor: <b>${escapeHtml(
+                    cauthor
+                  )}</b> • ${escapeHtml(c.created_at || "")}</div>
                 </div>
                 <div class="pill--votes" title="Hlasování">
-                  <button class="voteBtn ${cur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="comment" data-id="${escapeHtml(c.id)}" data-type="upvote">▲</button>
+                  <button class="voteBtn ${
+                    cur === "upvote" ? "is-active" : ""
+                  }" data-action="vote" data-kind="comment" data-id="${escapeHtml(
+                    c.id
+                  )}" data-type="upvote">▲</button>
                   <span class="voteCount">${Number(c.upvotes_count ?? 0)}</span>
-                  <button class="voteBtn ${cur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="comment" data-id="${escapeHtml(c.id)}" data-type="downvote">▼</button>
-                  <span class="voteCount">${Number(c.downvotes_count ?? 0)}</span>
+                  <button class="voteBtn ${
+                    cur === "downvote" ? "is-active" : ""
+                  }" data-action="vote" data-kind="comment" data-id="${escapeHtml(
+                    c.id
+                  )}" data-type="downvote">▼</button>
+                  <span class="voteCount">${Number(
+                    c.downvotes_count ?? 0
+                  )}</span>
                 </div>
               </div>
-              <div style="margin-top:10px; white-space:pre-wrap;">${escapeHtml(c.body || "")}</div>
+              <div style="margin-top:10px; white-space:pre-wrap;">${escapeHtml(
+                c.body || ""
+              )}</div>
             </div>
           `;
-        }).join("") : `<div class="muted">Zatím žádné komentáře.</div>`}
+                })
+                .join("")
+            : `<div class="muted">Zatím žádné komentáře.</div>`
+        }
 
-        ${isAuthed() ? `
+        ${
+          isAuthed()
+            ? `
           <div style="height:14px"></div>
           <form id="newCommentForm">
             <label class="muted">Napsat komentář</label>
@@ -503,45 +707,67 @@ async function renderPostDetail(id) {
             <div style="height:10px"></div>
             <button class="btn btn--primary" type="submit">Přidat</button>
           </form>
-        ` : `<div class="muted">Pro psaní komentářů se přihlas.</div>`}
+        `
+            : `<div class="muted">Pro psaní komentářů se přihlas.</div>`
+        }
       </div>
     `;
 
-    $app.querySelector("[data-action='edit-post']")?.addEventListener("click", (e) => {
-      const id = e.currentTarget.getAttribute("data-id");
-      openEditPost(id);
-    });
+    $app
+      .querySelector("[data-action='edit-post']")
+      ?.addEventListener("click", (e) => {
+        const id = e.currentTarget.getAttribute("data-id");
+        openEditPost(id);
+      });
 
-    $app.querySelector("[data-action='delete-post']")?.addEventListener("click", (e) => {
-      const id = e.currentTarget.getAttribute("data-id");
-      doDeletePost(id);
-    });
+    $app
+      .querySelector("[data-action='delete-post']")
+      ?.addEventListener("click", (e) => {
+        const id = e.currentTarget.getAttribute("data-id");
+        doDeletePost(id);
+      });
 
-    document.getElementById("newCommentForm")?.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const fd = new FormData(ev.target);
-      const body = String(fd.get("body") || "").trim();
+    document
+      .getElementById("newCommentForm")
+      ?.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const body = String(fd.get("body") || "").trim();
 
-      try {
-        await api(`/posts/${encodeURIComponent(id)}/comments`, { method: "POST", auth: true, body: { body } });
-        showFlash("Komentář přidán.", "ok");
-        location.hash = `#/post/${encodeURIComponent(id)}`;
-        route();
-      } catch (e) {
-        showFlash(e.message, "err");
-      }
-    });
+        try {
+          await api(`/posts/${encodeURIComponent(id)}/comments`, {
+            method: "POST",
+            auth: true,
+            body: { body },
+          });
+          showFlash("Komentář přidán.", "ok");
+          location.hash = `#/post/${encodeURIComponent(id)}`;
+          route();
+        } catch (e) {
+          showFlash(e.message, "err");
+        }
+      });
 
     // voting delegation
-    $app.querySelectorAll("[data-action='vote']").forEach(btn => {
+    $app.querySelectorAll("[data-action='vote']").forEach((btn) => {
       btn.addEventListener("click", async () => {
         if (!isAuthed()) return showFlash("Musíš se přihlásit.", "err");
         const kind = btn.getAttribute("data-kind");
         const id = btn.getAttribute("data-id");
         const type = btn.getAttribute("data-type");
         try {
-          if (kind === "post") await api(`/posts/${encodeURIComponent(id)}/reactions`, { method: "POST", auth: true, body: { type } });
-          else await api(`/comments/${encodeURIComponent(id)}/reactions`, { method: "POST", auth: true, body: { type } });
+          if (kind === "post")
+            await api(`/posts/${encodeURIComponent(id)}/reactions`, {
+              method: "POST",
+              auth: true,
+              body: { type },
+            });
+          else
+            await api(`/comments/${encodeURIComponent(id)}/reactions`, {
+              method: "POST",
+              auth: true,
+              body: { type },
+            });
           route();
         } catch (e) {
           showFlash(e.message, "err");
@@ -551,7 +777,9 @@ async function renderPostDetail(id) {
 
     renderAuthUI();
   } catch (e) {
-    $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
+    $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(
+      e.message
+    )}</b></div>`;
     renderAuthUI();
   }
 }
@@ -583,30 +811,40 @@ async function openEditPost(id) {
     <div class="card">
       <form id="editPostForm">
         <label class="muted">Nadpis</label>
-        <input name="title" required minlength="5" maxlength="255" value="${escapeHtml(current.title)}" />
+        <input name="title" required minlength="5" maxlength="255" value="${escapeHtml(
+          current.title
+        )}" />
         <div style="height:10px"></div>
         <label class="muted">Text</label>
-        <textarea name="body" required minlength="5" maxlength="8191">${escapeHtml(current.body)}</textarea>
+        <textarea name="body" required minlength="5" maxlength="8191">${escapeHtml(
+          current.body
+        )}</textarea>
         <div style="height:10px"></div>
         <button class="btn btn--primary" type="submit">Uložit</button>
       </form>
     </div>
   `;
 
-  document.getElementById("editPostForm").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const fd = new FormData(ev.target);
-    const title = String(fd.get("title") || "").trim();
-    const body = String(fd.get("body") || "").trim();
+  document
+    .getElementById("editPostForm")
+    .addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(ev.target);
+      const title = String(fd.get("title") || "").trim();
+      const body = String(fd.get("body") || "").trim();
 
-    try {
-      await api(`/posts/${encodeURIComponent(id)}`, { method: "PUT", auth: true, body: { title, body } });
-      showFlash("Uloženo.", "ok");
-      location.hash = `#/post/${encodeURIComponent(id)}`;
-    } catch (e) {
-      showFlash(e.message, "err");
-    }
-  });
+      try {
+        await api(`/posts/${encodeURIComponent(id)}`, {
+          method: "PUT",
+          auth: true,
+          body: { title, body },
+        });
+        showFlash("Uloženo.", "ok");
+        location.hash = `#/post/${encodeURIComponent(id)}`;
+      } catch (e) {
+        showFlash(e.message, "err");
+      }
+    });
 }
 
 async function doDeletePost(id) {
@@ -614,7 +852,10 @@ async function doDeletePost(id) {
   if (!confirm("Opravdu smazat příspěvek? (smažou se i komentáře)")) return;
 
   try {
-    await api(`/posts/${encodeURIComponent(id)}`, { method: "DELETE", auth: true });
+    await api(`/posts/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      auth: true,
+    });
     showFlash("Příspěvek smazán.", "ok");
     location.hash = "#/";
   } catch (e) {
