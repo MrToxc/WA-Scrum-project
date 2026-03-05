@@ -294,13 +294,13 @@ async function renderPosts({ page = 1 } = {}) {
                     ur === "upvote" ? "activeUp" : ""
                   }" data-action="vote" data-kind="post" data-id="${escapeHtml(
               p.id
-            )}" data-type="upvote">▲</button>
+            )}" data-type="upvote">⬆</button>
                   <span class="voteCount">${Number(p.upvotes_count ?? 0)}</span>
                   <button class="voteBtn ${
                     ur === "downvote" ? "activeUp" : ""
                   }" data-action="vote" data-kind="post" data-id="${escapeHtml(
               p.id
-            )}" data-type="downvote">▼</button>
+            )}" data-type="downvote">⬇</button>
                   <span class="voteCount">${Number(
                     p.downvotes_count ?? 0
                   )}</span>
@@ -644,13 +644,13 @@ async function renderPostDetail(id) {
             ur === "upvote" ? "is-active" : ""
           }" data-action="vote" data-kind="post" data-id="${escapeHtml(
       p.id
-    )}" data-type="upvote">▲</button>
+    )}" data-type="upvote">⬆</button>
           <span class="voteCount">${Number(p.upvotes_count ?? 0)}</span>
           <button class="voteBtn ${
             ur === "downvote" ? "is-active" : ""
           }" data-action="vote" data-kind="post" data-id="${escapeHtml(
       p.id
-    )}" data-type="downvote">▼</button>
+    )}" data-type="downvote">⬇</button>
           <span class="voteCount">${Number(p.downvotes_count ?? 0)}</span>
         </div>
       </div>
@@ -709,13 +709,13 @@ async function renderPostDetail(id) {
                     cur === "upvote" ? "is-active" : ""
                   }" data-action="vote" data-kind="comment" data-id="${escapeHtml(
                     c.id
-                  )}" data-type="upvote">▲</button>
+                  )}" data-type="upvote">⬆</button>
                   <span class="voteCount">${Number(c.upvotes_count ?? 0)}</span>
                   <button class="voteBtn ${
                     cur === "downvote" ? "is-active" : ""
                   }" data-action="vote" data-kind="comment" data-id="${escapeHtml(
                     c.id
-                  )}" data-type="downvote">▼</button>
+                  )}" data-type="downvote">⬇</button>
                   <span class="voteCount">${Number(
                     c.downvotes_count ?? 0
                   )}</span>

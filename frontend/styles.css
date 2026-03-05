@@ -247,28 +247,35 @@ textarea { min-height: 120px; resize: vertical; }
 }
 
 
-.voteBtn {
-  border: 1px solid var(--border);
-  background: transparent;
-  border-radius: 8px;
-  padding: 4px 8px;
-  cursor: pointer;
-  font-size: 15px;
-  transition: 0.15s;
+.voteBtn{
+  border:1px solid var(--border);
+  background:transparent;
+  color:inherit;
+  border-radius:8px;
+  width:32px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:0.15s;
 }
 
-.voteBtn:hover {
-  background: rgba(255,255,255,0.05);
+/* hover */
+.voteBtn:hover{
+  background:rgba(255,255,255,0.06);
 }
 
-.voteBtn.activeUp {
-  background: #16a34a;
-  border-color: #16a34a;
-  color: white;
+/* aktivní UPVOTE */
+.voteBtn.up.active{
+  background:#16a34a;
+  border-color:#16a34a;
+  color:white;
 }
 
-.voteBtn.activeDown {
-  background: #dc2626;
-  border-color: #dc2626;
-  color: white;
+/* aktivní DOWNVOTE */
+.voteBtn.down.active{
+  background:#dc2626;
+  border-color:#dc2626;
+  color:white;
 }
