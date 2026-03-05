@@ -286,7 +286,7 @@ async function renderPosts({ page = 1 } = {}) {
                   </a>
                   <div class="muted">autor: <b>${escapeHtml(
                     author
-                  )}</b> • ${escapeHtml(p.created_at || "")}</div>
+                  )}</b> • ${timeAgo(p.created_at)}|| "")}</div>
                 </div>
 
                 <div class="pill--votes" title="Hlasování">
@@ -624,9 +624,10 @@ async function renderPostDetail(id) {
 
       <div class="card" style="margin-top:12px;">
         <h1 style="margin-top:0">${escapeHtml(p.title)}</h1>
-        <div class="muted">autor: <b>${escapeHtml(author)}</b> • ${escapeHtml(
-      p.created_at || ""
-    )}</div>
+        <div class="author">
+        <div class="avatar">${author.charAt(0).toUpperCase()}</div>
+        <div class="authorName">${escapeHtml(author)}</div>
+        </div>
         <div style="margin-top:12px; white-space:pre-wrap;">${escapeHtml(
           p.body || ""
         )}</div>
@@ -861,6 +862,28 @@ async function doDeletePost(id) {
   } catch (e) {
     showFlash(e.message, "err");
   }
+}
+function timeAgo(dateString) {
+
+  const date = new Date(dateString);
+  const seconds = Math.floor((new Date() - date) / 1000);
+
+  const intervals = [
+    { label: "rok", seconds: 31536000 },
+    { label: "měsíc", seconds: 2592000 },
+    { label: "den", seconds: 86400 },
+    { label: "hodina", seconds: 3600 },
+    { label: "minuta", seconds: 60 }
+  ];
+
+  for (const i of intervals) {
+    const count = Math.floor(seconds / i.seconds);
+    if (count >= 1) {
+      return `před ${count} ${i.label}${count > 1 ? "y" : ""}`;
+    }
+  }
+
+  return "před chvílí";
 }
 
 // init
