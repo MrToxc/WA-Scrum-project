@@ -358,7 +358,7 @@ async function renderPosts({ page = 1 } = {}) {
                   <div class="metaRow">
                     <div class="userMeta">
                       <div class="avatar">${escapeHtml(avatarLetter(author))}</div>
-                      <div class="muted">autor: <b>${escapeHtml(author)}</b></div>
+                      <div class="muted"><b>${escapeHtml(author)}</b></div>
                     </div>
                     <div class="muted">• ${escapeHtml(timeAgo(p.created_at))}</div>
                   </div>
@@ -754,7 +754,7 @@ async function renderPostDetail(id) {
                       <div class="avatar">${escapeHtml(
                         avatarLetter(cauthor)
                       )}</div>
-                      <div class="muted">autor: <b>${escapeHtml(cauthor)}</b></div>
+                      <div class="muted"> <b>${escapeHtml(cauthor)}</b></div>
                     </div>
                     <div class="muted">• ${escapeHtml(timeAgo(c.created_at))}</div>
                   </div>
