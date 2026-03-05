@@ -220,3 +220,55 @@ textarea { min-height: 120px; resize: vertical; }
   font-weight: 700;
   font-size: 14px;
 }
+.metaRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.userMeta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(99, 102, 241, 0.18);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+
+.voteBtn {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: 0.15s;
+}
+
+.voteBtn:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.voteBtn.activeUp {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: white;
+}
+
+.voteBtn.activeDown {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+}

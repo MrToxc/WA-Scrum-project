@@ -291,13 +291,13 @@ async function renderPosts({ page = 1 } = {}) {
 
                 <div class="pill--votes" title="Hlasování">
                   <button class="voteBtn ${
-                    ur === "upvote" ? "is-active" : ""
+                    ur === "upvote" ? "activeUp" : ""
                   }" data-action="vote" data-kind="post" data-id="${escapeHtml(
               p.id
             )}" data-type="upvote">▲</button>
                   <span class="voteCount">${Number(p.upvotes_count ?? 0)}</span>
                   <button class="voteBtn ${
-                    ur === "downvote" ? "is-active" : ""
+                    ur === "downvote" ? "activeUp" : ""
                   }" data-action="vote" data-kind="post" data-id="${escapeHtml(
               p.id
             )}" data-type="downvote">▼</button>
@@ -897,23 +897,31 @@ async function doDeletePost(id) {
   }
 }
 function timeAgo(dateString) {
+  if (!dateString) return "";
 
   const date = new Date(dateString);
-  const seconds = Math.floor((new Date() - date) / 1000);
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (!Number.isFinite(diffSec) || diffSec < 0) return "";
 
-  const intervals = [
-    { label: "rok", seconds: 31536000 },
-    { label: "měsíc", seconds: 2592000 },
-    { label: "den", seconds: 86400 },
-    { label: "hodina", seconds: 3600 },
-    { label: "minuta", seconds: 60 }
+  const forms = (n, one, few, many) => {
+    // 11–14 jsou vždy "many"
+    if (n % 100 >= 11 && n % 100 <= 14) return many;
+    if (n % 10 === 1) return one;
+    if (n % 10 >= 2 && n % 10 <= 4) return few;
+    return many;
+  };
+
+  const units = [
+    { s: 31536000, one: "rokem",   few: "roky",   many: "lety" },   // před 1 rokem / před 2 roky / před 5 lety
+    { s: 2592000,  one: "měsícem", few: "měsíci", many: "měsíci" }, // ok pro běžné použití
+    { s: 86400,    one: "dnem",    few: "dny",    many: "dny" },
+    { s: 3600,     one: "hodinou", few: "hodinami", many: "hodinami" },
+    { s: 60,       one: "minutou", few: "minutami", many: "minutami" },
   ];
 
-  for (const i of intervals) {
-    const count = Math.floor(seconds / i.seconds);
-    if (count >= 1) {
-      return `před ${count} ${i.label}${count > 1 ? "y" : ""}`;
-    }
+  for (const u of units) {
+    const n = Math.floor(diffSec / u.s);
+    if (n >= 1) return `před ${n} ${forms(n, u.one, u.few, u.many)}`;
   }
 
   return "před chvílí";
