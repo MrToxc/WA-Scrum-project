@@ -329,8 +329,7 @@ function route() {
 
 window.addEventListener("hashchange", route);
 
-function patchVoteBoxFromServer({ kind, id, serverData }) {
-  const merged = normalizeEntity(serverData);
+function patchVoteBoxOptimistic({ kind, id, type }) {
   const selector = `[data-vote-box][data-kind="${kind}"][data-id="${CSS.escape(String(id))}"]`;
   const boxes = document.querySelectorAll(selector);
 
@@ -341,11 +340,44 @@ function patchVoteBoxFromServer({ kind, id, serverData }) {
     const downCount = box.querySelector('[data-role="downvotes"]');
     if (!upBtn || !downBtn || !upCount || !downCount) return;
 
-    upCount.textContent = String(Number(merged.upvotes_count ?? 0));
-    downCount.textContent = String(Number(merged.downvotes_count ?? 0));
+    let up = Number(upCount.textContent || 0);
+    let down = Number(downCount.textContent || 0);
 
-    upBtn.classList.toggle("is-active", merged.user_vote === "upvote");
-    downBtn.classList.toggle("is-active", merged.user_vote === "downvote");
+    const wasUp = upBtn.classList.contains("is-active");
+    const wasDown = downBtn.classList.contains("is-active");
+
+    if (type === "upvote") {
+      if (wasUp) {
+        up = Math.max(0, up - 1);
+        upBtn.classList.remove("is-active");
+      } else {
+        up += 1;
+        upBtn.classList.add("is-active");
+
+        if (wasDown) {
+          down = Math.max(0, down - 1);
+          downBtn.classList.remove("is-active");
+        }
+      }
+    }
+
+    if (type === "downvote") {
+      if (wasDown) {
+        down = Math.max(0, down - 1);
+        downBtn.classList.remove("is-active");
+      } else {
+        down += 1;
+        downBtn.classList.add("is-active");
+
+        if (wasUp) {
+          up = Math.max(0, up - 1);
+          upBtn.classList.remove("is-active");
+        }
+      }
+    }
+
+    upCount.textContent = String(up);
+    downCount.textContent = String(down);
   });
 }
 
@@ -360,18 +392,13 @@ async function handleVoteClick({ btn, kind, id, type }) {
       ? `/posts/${encodeURIComponent(id)}/reactions`
       : `/comments/${encodeURIComponent(id)}/reactions`;
 
-    const response = await api(path, { method: "POST", auth: true, body: { type } });
-
-    const serverEntity =
-      response?.data ??
-      response?.reaction ??
-      response;
-
-    patchVoteBoxFromServer({
-      kind,
-      id,
-      serverData: mergeVotedItem({ id }, serverEntity),
+    await api(path, {
+      method: "POST",
+      auth: true,
+      body: { type },
     });
+
+    patchVoteBoxOptimistic({ kind, id, type });
   } catch (e) {
     showFlash(e.message, "err");
   } finally {
