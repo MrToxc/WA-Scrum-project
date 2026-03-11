@@ -7,6 +7,9 @@ const $authStatus = document.getElementById("authStatus");
 const $btnLogout = document.getElementById("btnLogout");
 const $btnLoginLink = document.getElementById("btnLoginLink");
 const $btnRegisterLink = document.getElementById("btnRegisterLink");
+const $btnNavToggle = document.getElementById("btnNavToggle");
+const $mainNav = document.getElementById("mainNav");
+const $mainAuth = document.getElementById("mainAuth");
 
 /* ---------------- Cookie consent + UTM tracking ----------------
    - Show banner on first visit
@@ -169,9 +172,8 @@ function resolveAuthor(obj) {
   );
 }
 
-function avatarLetter(name) {
-  const s = String(name || "?").trim();
-  return (s[0] || "?").toUpperCase();
+function avatarUrl(name) {
+  return `https://avatars.laravel.cloud/${encodeURIComponent(String(name || "user").trim())}`;
 }
 
 // Czech "před X ..."
@@ -205,6 +207,19 @@ function timeAgo(dateString) {
   return "před chvílí";
 }
 
+
+
+function closeMobileNav() {
+  document.body.classList.remove("nav-open");
+  $btnNavToggle?.setAttribute("aria-expanded", "false");
+}
+
+function toggleMobileNav() {
+  const willOpen = !document.body.classList.contains("nav-open");
+  document.body.classList.toggle("nav-open", willOpen);
+  $btnNavToggle?.setAttribute("aria-expanded", willOpen ? "true" : "false");
+}
+
 function renderAuthUI() {
   const username = getUsername();
   if (username) {
@@ -228,6 +243,9 @@ function renderAuthUI() {
 
 /* ---------------- Topbar actions ---------------- */
 
+$btnNavToggle?.addEventListener("click", toggleMobileNav);
+window.addEventListener("hashchange", closeMobileNav);
+
 document.getElementById("btnTheme")?.addEventListener("click", () => {
   const root = document.documentElement;
   const isDark = root.classList.toggle("dark");
@@ -247,6 +265,7 @@ $btnLogout?.addEventListener("click", async () => {
 /* ---------------- Router ---------------- */
 
 function route() {
+  closeMobileNav();
   const hash = location.hash || "#/";
   const [path, queryString] = hash.slice(1).split("?");
   const parts = path.split("/").filter(Boolean);
@@ -258,7 +277,7 @@ function route() {
   if (parts[0] === "login") return renderLogin();
   if (parts[0] === "register") return renderRegister();
   if (parts[0] === "new-post") return renderNewPost();
-  if (parts[0] === "post" && parts[1]) return renderPostDetail(parts[1]);
+  if (parts[0] === "post" && parts[1]) return renderPostDetail(parts[1], { page: Number(qs.get("page") || 1) });
 
   return renderNotFound();
 }
@@ -357,7 +376,7 @@ async function renderPosts({ page = 1 } = {}) {
 
                   <div class="metaRow">
                     <div class="userMeta">
-                      <div class="avatar">${escapeHtml(avatarLetter(author))}</div>
+                      <img class="avatar" src="${avatarUrl(author)}" alt="${escapeHtml(author)}" loading="lazy" referrerpolicy="no-referrer" />
                       <div class="muted"><b>${escapeHtml(author)}</b></div>
                     </div>
                     <div class="muted">• ${escapeHtml(timeAgo(p.created_at))}</div>
@@ -672,7 +691,7 @@ function renderNewPost() {
   });
 }
 
-async function renderPostDetail(id) {
+async function renderPostDetail(id, { page = 1 } = {}) {
   $app.innerHTML = `<div class="card muted">Načítám…</div>`;
 
   try {
@@ -681,10 +700,11 @@ async function renderPostDetail(id) {
     });
     const p = postWrap?.data;
 
-    const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments`, {
+    const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments?page=${encodeURIComponent(page)}&per_page=8`, {
       auth: isAuthed(),
     });
     const comments = commentsWrap?.data ?? [];
+    const commentsMeta = commentsWrap?.meta ?? {};
 
     const ur = p?.user_reaction;
     const author = resolveAuthor(p);
@@ -709,7 +729,7 @@ async function renderPostDetail(id) {
 
         <div class="metaRow">
           <div class="userMeta">
-            <div class="avatar">${escapeHtml(avatarLetter(author))}</div>
+            <img class="avatar" src="${avatarUrl(author)}" alt="${escapeHtml(author)}" loading="lazy" referrerpolicy="no-referrer" />
             <div class="muted" <b>${escapeHtml(author)}</b></div>
           </div>
           <div class="muted">• ${escapeHtml(timeAgo(p.created_at))}</div>
@@ -751,10 +771,8 @@ async function renderPostDetail(id) {
                 <div>
                   <div class="metaRow">
                     <div class="userMeta">
-                      <div class="avatar">${escapeHtml(
-                        avatarLetter(cauthor)
-                      )}</div>
-                      <div class="muted"> <b>${escapeHtml(cauthor)}</b></div>
+                      <img class="avatar" src="${avatarUrl(cauthor)}" alt="${escapeHtml(cauthor)}" loading="lazy" referrerpolicy="no-referrer" />
+                      <div class="muted"><b>${escapeHtml(cauthor)}</b></div>
                     </div>
                     <div class="muted">• ${escapeHtml(timeAgo(c.created_at))}</div>
                   </div>
@@ -786,6 +804,14 @@ async function renderPostDetail(id) {
                 .join("")
             : `<div class="muted">Zatím žádné komentáře.</div>`
         }
+
+        ${comments.length ? `
+          <div class="row commentsPager" style="justify-content:space-between; margin-top:12px;">
+            <a class="btn ${Number(commentsMeta.page || commentsMeta.current_page || 1) <= 1 ? "is-disabled" : ""}" href="#/post/${encodeURIComponent(id)}?page=${Math.max(1, Number(commentsMeta.page || commentsMeta.current_page || 1) - 1)}">← Předchozí</a>
+            <div class="muted">Komentáře ${Number(commentsMeta.page || commentsMeta.current_page || 1)} / ${Number(commentsMeta.last_page || 1)}</div>
+            <a class="btn ${Number(commentsMeta.page || commentsMeta.current_page || 1) >= Number(commentsMeta.last_page || 1) ? "is-disabled" : ""}" href="#/post/${encodeURIComponent(id)}?page=${Math.min(Number(commentsMeta.last_page || 1), Number(commentsMeta.page || commentsMeta.current_page || 1) + 1)}">Další →</a>
+          </div>
+        ` : ""}
 
         ${
           isAuthed()
@@ -827,7 +853,7 @@ async function renderPostDetail(id) {
           body: { body },
         });
         showFlash("Komentář přidán.", "ok");
-        await renderPostDetail(id);
+        await renderPostDetail(id, { page });
       } catch (e) {
         showFlash(e.message, "err");
       }
@@ -847,7 +873,7 @@ async function renderPostDetail(id) {
           kind,
           id: rid,
           type,
-          rerender: () => renderPostDetail(id),
+          rerender: () => renderPostDetail(id, { page }),
         });
       });
     });
