@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\IsAdmin::class,
         ]);
 
+        // Strip HTML tagů ze všech API vstupů
+        $middleware->api(append: [
+            \App\Http\Middleware\StripTags::class,
+        ]);
+
         // API nemá login stránku — bez tohoto Sanctum hledá route('login') a spadne
         $middleware->redirectGuestsTo(function ($request) {
             if ($request->is('api/*')) {
