@@ -47,6 +47,8 @@ class AuthController extends Controller
             'password_lookup' => $lookup,
         ]);
 
+        $user->refresh(); // načte DB výchozí hodnoty (is_admin = false)
+
         // token pro API
         $token = $user->createToken('api')->plainTextToken;
 
@@ -54,6 +56,7 @@ class AuthController extends Controller
             'username' => $user->username,
             'password' => $plainPassword, // zobrazit jen při registraci
             'token' => $token,
+            'is_admin' => $user->is_admin,
         ], 201);
     }
 
@@ -87,6 +90,7 @@ class AuthController extends Controller
             'user' => [
                 'id' => $user->id,
                 'username' => $user->username,
+                'is_admin' => $user->is_admin,
             ],
         ]);
     }
@@ -107,6 +111,7 @@ class AuthController extends Controller
         return response()->json([
             'id' => $user->id,
             'username' => $user->username,
+            'is_admin' => $user->is_admin,
         ]);
     }
 

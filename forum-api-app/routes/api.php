@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\PostController;
@@ -92,6 +93,18 @@ Route::prefix('v1')->group(function () {
     // protected – analytics dashboard
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/analytics/utm', [UtmVisitController::class, 'stats']);   // GET  /api/v1/analytics/utm
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | ADMIN
+    |----------------------------------------------------------------------
+    */
+
+    Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+        Route::delete('/users/{user}', [AdminController::class, 'destroyUser']);       // DELETE /api/v1/admin/users/{id}
+        Route::delete('/posts/{post}', [AdminController::class, 'destroyPost']);       // DELETE /api/v1/admin/posts/{id}
+        Route::delete('/comments/{comment}', [AdminController::class, 'destroyComment']); // DELETE /api/v1/admin/comments/{id}
     });
 
 });

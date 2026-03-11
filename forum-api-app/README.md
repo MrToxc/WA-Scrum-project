@@ -36,7 +36,8 @@ Creates a new user account with an auto-generated password.
 {
   "username": "tester1",
   "password": "aB3$kL9mNp2xQr7wYz",
-  "token": "1|abc123def456..."
+  "token": "1|abc123def456...",
+  "is_admin": false
 }
 ```
 
@@ -60,7 +61,8 @@ Logs in using **only the password**. Deletes all previous tokens (only 1 active 
   "token": "2|xyz789ghi012...",
   "user": {
     "id": 1,
-    "username": "tester1"
+    "username": "tester1",
+    "is_admin": false
   }
 }
 ```
@@ -93,7 +95,8 @@ Returns the currently authenticated user's info.
 ```json
 {
   "id": 1,
-  "username": "tester1"
+  "username": "tester1",
+  "is_admin": false
 }
 ```
 
@@ -511,7 +514,69 @@ Toggle a reaction on a comment. Exact same behavior and responses as POST /posts
 
 ---
 
-## 5. Cascade Delete Summary
+## 5. Admin (Moderation)
+
+Admin endpoints allow moderators to delete any user, post, or comment. All admin endpoints require authentication **and** admin privileges.
+
+The `is_admin` field is included in all auth responses (`/auth/register`, `/auth/login`, `/auth/me`) so the frontend can conditionally show admin controls.
+
+### How to grant admin rights
+
+1. Open a terminal in the project directory
+2. Run `php artisan tinker`
+3. Grant admin by username:
+```php
+User::where('username', 'tester1')->first()->update(['is_admin' => true]);
+```
+4. Type `exit` to close tinker
+
+To **revoke** admin rights:
+```php
+User::where('username', 'tester1')->first()->update(['is_admin' => false]);
+```
+
+---
+
+### DELETE /admin/users/{user} ⟵ admin required
+
+Deletes a user and all their data (posts, comments, reactions — cascade).
+
+**204 No Content** — empty response body on success.
+
+**Errors:**
+- `401` — not authenticated
+- `403` — not an admin
+- `404` — user does not exist
+
+---
+
+### DELETE /admin/posts/{post} ⟵ admin required
+
+Deletes any post (regardless of author). Same cascade behavior as regular post delete.
+
+**204 No Content** — empty response body on success.
+
+**Errors:**
+- `401` — not authenticated
+- `403` — not an admin
+- `404` — post does not exist
+
+---
+
+### DELETE /admin/comments/{comment} ⟵ admin required
+
+Deletes any comment (regardless of author). Same cascade behavior as regular comment delete.
+
+**204 No Content** — empty response body on success.
+
+**Errors:**
+- `401` — not authenticated
+- `403` — not an admin
+- `404` — comment does not exist
+
+---
+
+## 6. Cascade Delete Summary
 
 When entities are deleted, related data is automatically cleaned up:
 
@@ -523,7 +588,7 @@ When entities are deleted, related data is automatically cleaned up:
 
 ---
 
-## 6. Common Error Responses
+## 7. Common Error Responses
 
 ### 401 Unauthorized
 ```json
@@ -535,7 +600,7 @@ Token is missing, expired, or invalid.
 ```json
 { "message": "Forbidden" }
 ```
-Authenticated but not allowed (e.g., trying to edit/delete someone else's post/comment/reaction).
+Authenticated but not allowed (e.g., trying to edit/delete someone else's post/comment, or accessing admin endpoints without admin privileges).
 
 ### 404 Not Found
 ```json
@@ -557,7 +622,7 @@ Validation failed. The `errors` object contains field-specific error messages.
 
 ---
 
-## 7. Full Route Table
+## 8. Full Route Table
 
 | Method | URI | Auth | Description |
 |--------|-----|:----:|-------------|
@@ -576,6 +641,9 @@ Validation failed. The `errors` object contains field-specific error messages.
 | DELETE | /comments/{comment} | ✓ | Delete comment (author only) |
 | POST | /posts/{post}/reactions | ✓ | Toggle reaction on post |
 | POST | /comments/{comment}/reactions | ✓ | Toggle reaction on comment |
+| DELETE | /admin/users/{user} | ✓ admin | Delete any user (admin only) |
+| DELETE | /admin/posts/{post} | ✓ admin | Delete any post (admin only) |
+| DELETE | /admin/comments/{comment} | ✓ admin | Delete any comment (admin only) |
 
 **Auth column:** ✗ = public (no token needed, but sending a token enhances response with `user_reaction`). ✓ = token required, returns 401 without it.
 

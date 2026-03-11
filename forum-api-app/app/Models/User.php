@@ -23,6 +23,7 @@ class User extends Authenticatable
         'username',
         'password',
         'password_lookup',
+        'is_admin',
     ];
 
     protected $hidden = [
@@ -36,6 +37,7 @@ class User extends Authenticatable
         return [
             // když nastavíš $user->password = "abc", Laravel to sám zahashuje
             'password' => 'hashed',
+            'is_admin' => 'boolean',
         ];
     }
     public function posts(): HasMany
