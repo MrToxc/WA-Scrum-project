@@ -620,30 +620,52 @@ The requested resource (post, comment, reaction) does not exist. This is returne
 ```
 Validation failed. The `errors` object contains field-specific error messages.
 
+### 429 Too Many Requests
+```json
+{ "message": "Too Many Attempts." }
+```
+Rate limit exceeded. Response includes a `Retry-After` header with the number of seconds to wait.
+
 ---
 
-## 8. Full Route Table
+## 9. Rate Limiting
 
-| Method | URI | Auth | Description |
-|--------|-----|:----:|-------------|
-| POST | /auth/register | ✗ | Register new user |
-| POST | /auth/login | ✗ | Login with password |
-| POST | /auth/logout | ✓ | Logout (delete all tokens) |
-| GET | /auth/me | ✓ | Get current user info |
-| GET | /posts | ✗ | List posts (paginated) |
-| GET | /posts/{post} | ✗ | Get single post |
-| POST | /posts | ✓ | Create post |
-| PUT | /posts/{post} | ✓ | Update post (author only) |
-| DELETE | /posts/{post} | ✓ | Delete post (author only) |
-| GET | /posts/{post}/comments | ✗ | List comments for post (paginated) |
-| POST | /posts/{post}/comments | ✓ | Create comment on post |
-| PUT | /comments/{comment} | ✓ | Update comment (author only) |
-| DELETE | /comments/{comment} | ✓ | Delete comment (author only) |
-| POST | /posts/{post}/reactions | ✓ | Toggle reaction on post |
-| POST | /comments/{comment}/reactions | ✓ | Toggle reaction on comment |
-| DELETE | /admin/users/{user} | ✓ admin | Delete any user (admin only) |
-| DELETE | /admin/posts/{post} | ✓ admin | Delete any post (admin only) |
-| DELETE | /admin/comments/{comment} | ✓ admin | Delete any comment (admin only) |
+All endpoints are rate-limited to prevent abuse. Limits are applied **per IP address** (public routes) or **per user account** (authenticated routes).
+
+| Limiter | Limit | Applies to | Keyed by |
+|---------|-------|-----------|----------|
+| `register` | 5/min | POST /auth/register | IP |
+| `login` | 30/min | POST /auth/login | IP |
+| `reads` | 60/min | All GET endpoints | User ID or IP |
+| `writes` | 20/min | All POST/PUT endpoints | User ID or IP |
+| `deletes` | 40/min | All DELETE endpoints | User ID or IP |
+
+When a limit is exceeded, the API returns `429 Too Many Requests` with a `Retry-After` header.
+
+---
+
+## 10. Full Route Table
+
+| Method | URI | Auth | Rate Limit | Description |
+|--------|-----|:----:|:----------:|-------------|
+| POST | /auth/register | ✗ | 5/min | Register new user |
+| POST | /auth/login | ✗ | 30/min | Login with password |
+| POST | /auth/logout | ✓ | 20/min | Logout (delete all tokens) |
+| GET | /auth/me | ✓ | 60/min | Get current user info |
+| GET | /posts | ✗ | 60/min | List posts (paginated) |
+| GET | /posts/{post} | ✗ | 60/min | Get single post |
+| POST | /posts | ✓ | 20/min | Create post |
+| PUT | /posts/{post} | ✓ | 20/min | Update post (author only) |
+| DELETE | /posts/{post} | ✓ | 40/min | Delete post (author only) |
+| GET | /posts/{post}/comments | ✗ | 60/min | List comments for post (paginated) |
+| POST | /posts/{post}/comments | ✓ | 20/min | Create comment on post |
+| PUT | /comments/{comment} | ✓ | 20/min | Update comment (author only) |
+| DELETE | /comments/{comment} | ✓ | 40/min | Delete comment (author only) |
+| POST | /posts/{post}/reactions | ✓ | 20/min | Toggle reaction on post |
+| POST | /comments/{comment}/reactions | ✓ | 20/min | Toggle reaction on comment |
+| DELETE | /admin/users/{user} | ✓ admin | 40/min | Delete any user (admin only) |
+| DELETE | /admin/posts/{post} | ✓ admin | 40/min | Delete any post (admin only) |
+| DELETE | /admin/comments/{comment} | ✓ admin | 40/min | Delete any comment (admin only) |
 
 **Auth column:** ✗ = public (no token needed, but sending a token enhances response with `user_reaction`). ✓ = token required, returns 401 without it.
 

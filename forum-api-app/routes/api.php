@@ -8,14 +8,9 @@ use App\Http\Controllers\ReactionController;
 use App\Http\Controllers\UtmVisitController;
 use Illuminate\Support\Facades\Route;
 
-//Route::get('/user', function (Request $request) {
-//    return $request->user();
-//})->middleware('auth:sanctum');
-
-
 /*
 |--------------------------------------------------------------------------
-| API Routes (Development version – without auth)
+| API Routes
 |--------------------------------------------------------------------------
 */
 
@@ -27,13 +22,18 @@ Route::prefix('v1')->group(function () {
     |----------------------------------------------------------------------
     */
     Route::prefix('auth')->group(function () {
-        Route::post('/register', [AuthController::class, 'register']); // POST /api/v1/auth/register
-        Route::post('/login', [AuthController::class, 'login']);    // POST /api/v1/auth/login
+        Route::post('/register', [AuthController::class, 'register'])
+            ->middleware('throttle:register');                              // 5/min by IP
+
+        Route::post('/login', [AuthController::class, 'login'])
+            ->middleware('throttle:login');                                 // 30/min by IP
 
         // chráněné (token musí být poslaný)
         Route::middleware('auth:sanctum')->group(function () {
-            Route::post('/logout', [AuthController::class, 'logout']); // POST /api/v1/auth/logout
-            Route::get('/me', [AuthController::class, 'me']);     // GET  /api/v1/auth/me
+            Route::post('/logout', [AuthController::class, 'logout'])
+                ->middleware('throttle:writes');                            // 20/min
+            Route::get('/me', [AuthController::class, 'me'])
+                ->middleware('throttle:reads');                             // 60/min
         });
     });
 
@@ -44,14 +44,19 @@ Route::prefix('v1')->group(function () {
     */
 
     // veřejné čtení
-    Route::get('/posts', [PostController::class, 'index']);
-    Route::get('/posts/{post}', [PostController::class, 'show']);
+    Route::middleware('throttle:reads')->group(function () {                // 60/min
+        Route::get('/posts', [PostController::class, 'index']);
+        Route::get('/posts/{post}', [PostController::class, 'show']);
+    });
 
-    // doporučeně chránit zápis (pokud chceš veřejný zápis, middleware smaž)
+    // chráněný zápis
     Route::middleware('auth:sanctum')->group(function () {
-        Route::post('/posts', [PostController::class, 'store']);
-        Route::put('/posts/{post}', [PostController::class, 'update']);
-        Route::delete('/posts/{post}', [PostController::class, 'destroy']);
+        Route::post('/posts', [PostController::class, 'store'])
+            ->middleware('throttle:writes');                                // 20/min
+        Route::put('/posts/{post}', [PostController::class, 'update'])
+            ->middleware('throttle:writes');                                // 20/min
+        Route::delete('/posts/{post}', [PostController::class, 'destroy'])
+            ->middleware('throttle:deletes');                               // 40/min
     });
 
     /*
@@ -61,13 +66,17 @@ Route::prefix('v1')->group(function () {
     */
 
     // veřejné čtení komentářů k postu
-    Route::get('/posts/{post}/comments', [CommentController::class, 'index']);
+    Route::get('/posts/{post}/comments', [CommentController::class, 'index'])
+        ->middleware('throttle:reads');                                     // 60/min
 
-    // doporučeně chránit zápis/edit/smazání
+    // chráněný zápis/edit/smazání
     Route::middleware('auth:sanctum')->group(function () {
-        Route::post('/posts/{post}/comments', [CommentController::class, 'store']);
-        Route::put('/comments/{comment}', [CommentController::class, 'update']);
-        Route::delete('/comments/{comment}', [CommentController::class, 'destroy']);
+        Route::post('/posts/{post}/comments', [CommentController::class, 'store'])
+            ->middleware('throttle:writes');                                // 20/min
+        Route::put('/comments/{comment}', [CommentController::class, 'update'])
+            ->middleware('throttle:writes');                                // 20/min
+        Route::delete('/comments/{comment}', [CommentController::class, 'destroy'])
+            ->middleware('throttle:deletes');                               // 40/min
     });
 
     /*
@@ -77,8 +86,10 @@ Route::prefix('v1')->group(function () {
     */
 
     Route::middleware('auth:sanctum')->group(function () {
-        Route::post('/posts/{post}/reactions', [ReactionController::class, 'storeForPost']);       // POST /api/v1/posts/{id}/reactions
-        Route::post('/comments/{comment}/reactions', [ReactionController::class, 'storeForComment']); // POST /api/v1/comments/{id}/reactions
+        Route::post('/posts/{post}/reactions', [ReactionController::class, 'storeForPost'])
+            ->middleware('throttle:writes');                                // 20/min
+        Route::post('/comments/{comment}/reactions', [ReactionController::class, 'storeForComment'])
+            ->middleware('throttle:writes');                                // 20/min
     });
 
     /*
@@ -88,11 +99,13 @@ Route::prefix('v1')->group(function () {
     */
 
     // public – no auth required
-    Route::post('/track', [UtmVisitController::class, 'track']);              // POST /api/v1/track
+    Route::post('/track', [UtmVisitController::class, 'track'])
+        ->middleware('throttle:writes');                                    // 20/min
 
     // protected – analytics dashboard
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/analytics/utm', [UtmVisitController::class, 'stats']);   // GET  /api/v1/analytics/utm
+        Route::get('/analytics/utm', [UtmVisitController::class, 'stats'])
+            ->middleware('throttle:reads');                                 // 60/min
     });
 
     /*
@@ -102,9 +115,12 @@ Route::prefix('v1')->group(function () {
     */
 
     Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
-        Route::delete('/users/{user}', [AdminController::class, 'destroyUser']);       // DELETE /api/v1/admin/users/{id}
-        Route::delete('/posts/{post}', [AdminController::class, 'destroyPost']);       // DELETE /api/v1/admin/posts/{id}
-        Route::delete('/comments/{comment}', [AdminController::class, 'destroyComment']); // DELETE /api/v1/admin/comments/{id}
+        Route::delete('/users/{user}', [AdminController::class, 'destroyUser'])
+            ->middleware('throttle:deletes');                               // 40/min
+        Route::delete('/posts/{post}', [AdminController::class, 'destroyPost'])
+            ->middleware('throttle:deletes');                               // 40/min
+        Route::delete('/comments/{comment}', [AdminController::class, 'destroyComment'])
+            ->middleware('throttle:deletes');                               // 40/min
     });
 
 });
