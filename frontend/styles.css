@@ -279,3 +279,110 @@ textarea { min-height: 120px; resize: vertical; }
   border-color:#dc2626;
   color:white;
 }
+
+/* mobile navbar */
+.navToggle {
+  display: none;
+}
+
+.btn.is-disabled {
+  opacity: .45;
+  pointer-events: none;
+}
+
+.avatar {
+  object-fit: cover;
+  background: rgba(99, 102, 241, 0.12);
+}
+
+@media (max-width: 860px) {
+  .forum-title {
+    margin: 1.2rem 0 1rem 0;
+    padding: 0 12px;
+  }
+
+  .forum-title h1 {
+    font-size: 2rem;
+  }
+
+  .topbar__inner {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .navToggle {
+    display: inline-flex;
+    order: 1;
+  }
+
+  .nav,
+  .auth {
+    display: none;
+    width: 100%;
+  }
+
+  body.nav-open .nav,
+  body.nav-open .auth {
+    display: flex;
+  }
+
+  .nav {
+    order: 3;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding-top: 10px;
+  }
+
+  .auth {
+    order: 4;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding-top: 10px;
+  }
+
+  .nav__btn,
+  .auth .btn,
+  .auth__status {
+    width: 100%;
+  }
+
+  .auth__status {
+    padding: 8px 2px;
+  }
+
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .pill--votes {
+    width: 100%;
+    justify-content: center;
+    margin-top: 10px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    width: min(100% - 16px, 980px);
+  }
+
+  .metaRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .voteBtn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .commentsPager {
+    gap: 8px;
+  }
+}

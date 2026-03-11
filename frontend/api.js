@@ -1,5 +1,7 @@
 
-export const API_BASE = "http://127.0.0.1:8000/api/v1";
+export const API_BASE = location.hostname === "127.0.0.1" || location.hostname === "localhost"
+  ? "http://127.0.0.1:8000/api/v1"
+  : "/api/v1";
 
 
 export function getToken() {
@@ -33,13 +35,28 @@ async function parseJsonSafe(res) {
 }
 
 function pickLaravelError(data, status) {
-  // typicky: {message, errors:{field:[msg]}}
   if (data?.errors && typeof data.errors === "object") {
     const firstField = Object.keys(data.errors)[0];
     const first = Array.isArray(data.errors[firstField]) ? data.errors[firstField][0] : data.errors[firstField];
     if (first) return String(first);
   }
-  return data?.error || data?.message || `HTTP ${status}`;
+
+  const raw = String(data?.error || data?.message || "").trim();
+  const map = {
+    "Unauthorized": "Musíš se přihlásit.",
+    "Forbidden": "Na tohle nemáš oprávnění.",
+    "Not Found": "Požadovaný obsah nebyl nalezen.",
+    "The given data was invalid.": "Odeslaná data nejsou platná.",
+    "Validation error": "Odeslaná data nejsou platná.",
+    "Too Many Attempts.": "Zkus to prosím znovu za chvíli.",
+  };
+
+  if (map[raw]) return map[raw];
+  if (status === 401) return "Musíš se přihlásit.";
+  if (status == 403) return "Na tohle nemáš oprávnění.";
+  if (status == 404) return "Požadovaný obsah nebyl nalezen.";
+  if (status >= 500) return "Na serveru nastala chyba.";
+  return raw || `HTTP ${status}`;
 }
 
 // Jedno místo pro HTTP volání
