@@ -386,3 +386,72 @@ textarea { min-height: 120px; resize: vertical; }
     gap: 8px;
   }
 }
+
+
+html, body { overflow-x: hidden; }
+
+a { word-break: break-word; }
+
+main.wrap { padding-bottom: 24px; }
+
+.pageHead {
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cardHead {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.postLink { text-decoration: none; color: inherit; }
+.postTitle { margin: 0 0 6px 0; }
+.postBody {
+  margin-top: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.actionRow {
+  justify-content: flex-end;
+  margin-top: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pagerRow {
+  justify-content: space-between;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.hidden { display: none; }
+.is-disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.secretCard {
+  background: rgba(0,0,0,.04);
+  border: 1px dashed rgba(127,127,127,.35);
+}
+
+.commentCard {
+  margin-top: 10px;
+}
+
+@media (max-width: 760px) {
+  .topbar__inner, .nav, .auth {
+    flex-wrap: wrap;
+  }
+
+  .pill--votes {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
