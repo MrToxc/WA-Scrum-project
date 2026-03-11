@@ -143,8 +143,8 @@ function resolveAuthor(obj) {
   return obj?.author_username || obj?.username || obj?.user?.username || obj?.author?.username || "unknown";
 }
 
-function initial(name) {
-  return String(name || "?").trim().charAt(0).toUpperCase() || "?";
+function buildAvatarUrl(author) {
+  return `https://avatars.laravel.cloud/${encodeURIComponent(String(author || "unknown"))}`;
 }
 
 function timeAgo(dateString) {
@@ -204,20 +204,22 @@ function canAdminManage() {
 function renderReactionControls(entity, kind) {
   const ur = entity?.user_reaction;
   return `
-    <div class="pill--votes" title="Hlasování">
-      <button class="voteBtn ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="upvote" aria-label="Upvote">▲</button>
-      <span class="voteCount">${Number(entity.upvotes_count ?? 0)}</span>
-      <button class="voteBtn ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="downvote" aria-label="Downvote">▼</button>
-      <span class="voteCount">${Number(entity.downvotes_count ?? 0)}</span>
+    <div class="pill--votes" title="Hlasování" data-vote-box data-kind="${kind}" data-id="${escapeHtml(entity.id)}">
+      <button class="voteBtn voteBtn--up ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="upvote" aria-label="Upvote">▲</button>
+      <span class="voteCount" data-role="upvotes">${Number(entity.upvotes_count ?? 0)}</span>
+      <button class="voteBtn voteBtn--down ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="downvote" aria-label="Downvote">▼</button>
+      <span class="voteCount" data-role="downvotes">${Number(entity.downvotes_count ?? 0)}</span>
     </div>
   `;
 }
 
 function renderAuthor(author) {
+  const safeAuthor = escapeHtml(author);
+  const avatarUrl = escapeHtml(buildAvatarUrl(author));
   return `
     <div class="userMeta">
-      <span class="avatar" aria-hidden="true">${escapeHtml(initial(author))}</span>
-      <div class="muted"><b>${escapeHtml(author)}</b></div>
+      <img class="avatar" src="${avatarUrl}" alt="Avatar uživatele ${safeAuthor}" loading="lazy" referrerpolicy="no-referrer" />
+      <div class="muted"><b>${safeAuthor}</b></div>
     </div>
   `;
 }
@@ -305,19 +307,86 @@ function route() {
 
 window.addEventListener("hashchange", route);
 
-async function handleVoteClick({ kind, id, type, rerender }) {
+function patchVoteBox({ kind, id, type }) {
+  const selector = `[data-vote-box][data-kind="${kind}"][data-id="${CSS.escape(String(id))}"]`;
+  const boxes = document.querySelectorAll(selector);
+  boxes.forEach((box) => {
+    const upBtn = box.querySelector('[data-type="upvote"]');
+    const downBtn = box.querySelector('[data-type="downvote"]');
+    const upCount = box.querySelector('[data-role="upvotes"]');
+    const downCount = box.querySelector('[data-role="downvotes"]');
+    if (!upBtn || !downBtn || !upCount || !downCount) return;
+
+    let up = Number(upCount.textContent || 0);
+    let down = Number(downCount.textContent || 0);
+    const wasUp = upBtn.classList.contains("is-active");
+    const wasDown = downBtn.classList.contains("is-active");
+
+    if (type === "upvote") {
+      if (wasUp) {
+        up = Math.max(0, up - 1);
+        upBtn.classList.remove("is-active");
+      } else {
+        up += 1;
+        upBtn.classList.add("is-active");
+        if (wasDown) {
+          down = Math.max(0, down - 1);
+          downBtn.classList.remove("is-active");
+        }
+      }
+    }
+
+    if (type === "downvote") {
+      if (wasDown) {
+        down = Math.max(0, down - 1);
+        downBtn.classList.remove("is-active");
+      } else {
+        down += 1;
+        downBtn.classList.add("is-active");
+        if (wasUp) {
+          up = Math.max(0, up - 1);
+          upBtn.classList.remove("is-active");
+        }
+      }
+    }
+
+    upCount.textContent = String(up);
+    downCount.textContent = String(down);
+  });
+}
+
+async function handleVoteClick({ btn, kind, id, type }) {
   if (!isAuthed()) return showFlash("Musíš se přihlásit.", "err");
+  if (btn?.dataset.loading === "1") return;
 
   try {
+    if (btn) btn.dataset.loading = "1";
     const path = kind === "post"
       ? `/posts/${encodeURIComponent(id)}/reactions`
       : `/comments/${encodeURIComponent(id)}/reactions`;
 
     await api(path, { method: "POST", auth: true, body: { type } });
-    await rerender();
+    patchVoteBox({ kind, id, type });
   } catch (e) {
     showFlash(e.message, "err");
+  } finally {
+    if (btn) delete btn.dataset.loading;
   }
+}
+
+function bindVoteButtons() {
+  $app.querySelectorAll("[data-action='vote']").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await handleVoteClick({
+        btn,
+        kind: btn.getAttribute("data-kind"),
+        id: btn.getAttribute("data-id"),
+        type: btn.getAttribute("data-type"),
+      });
+    });
+  });
 }
 
 async function renderPosts({ page = 1 } = {}) {
@@ -366,7 +435,8 @@ async function renderPosts({ page = 1 } = {}) {
                 ${renderReactionControls(p, "post")}
               </div>
 
-              <div class="postBody">${escapeHtml(p.body || "")}</div>
+              <div class="postBody postBody--preview">${escapeHtml(p.body || "")}</div>
+              <a class="postMoreLink" href="#/post/${encodeURIComponent(p.id)}">Zobrazit celý příspěvek →</a>
               ${renderPostActions(p)}
             </div>
           `;
@@ -381,6 +451,7 @@ async function renderPosts({ page = 1 } = {}) {
     `;
 
     bindPostListActions(page);
+    bindVoteButtons();
     renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
@@ -403,19 +474,6 @@ function bindPostListActions(page) {
 
   $app.querySelectorAll("[data-action='admin-delete-user']").forEach((btn) => {
     btn.addEventListener("click", () => doAdminDeleteUser(btn.getAttribute("data-id"), btn.getAttribute("data-username"), () => renderPosts({ page })));
-  });
-
-  $app.querySelectorAll("[data-action='vote']").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      await handleVoteClick({
-        kind: btn.getAttribute("data-kind"),
-        id: btn.getAttribute("data-id"),
-        type: btn.getAttribute("data-type"),
-        rerender: () => renderPosts({ page }),
-      });
-    });
   });
 }
 
@@ -650,6 +708,7 @@ async function renderPostDetail(id, { page = 1 } = {}) {
     `;
 
     bindDetailActions(id, page);
+    bindVoteButtons();
     renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
@@ -704,19 +763,6 @@ function bindDetailActions(postId, page) {
     } catch (e) {
       showFlash(e.message, "err");
     }
-  });
-
-  $app.querySelectorAll("[data-action='vote']").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      await handleVoteClick({
-        kind: btn.getAttribute("data-kind"),
-        id: btn.getAttribute("data-id"),
-        type: btn.getAttribute("data-type"),
-        rerender: () => renderPostDetail(postId, { page }),
-      });
-    });
   });
 }
 
@@ -800,9 +846,69 @@ function openEditComment(postId, commentId, currentBody, page) {
   });
 }
 
+function ensureConfirmRoot() {
+  let root = document.getElementById("confirmRoot");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "confirmRoot";
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
+function showConfirmDialog({
+  title = "Potvrdit akci",
+  message = "Opravdu pokračovat?",
+  confirmText = "Potvrdit",
+  cancelText = "Zrušit",
+  danger = false,
+} = {}) {
+  return new Promise((resolve) => {
+    const root = ensureConfirmRoot();
+    root.innerHTML = `
+      <div class="modalBackdrop">
+        <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+          <div class="modalIcon ${danger ? "modalIcon--danger" : ""}">${danger ? "!" : "?"}</div>
+          <h3 id="confirmTitle" class="modalTitle">${escapeHtml(title)}</h3>
+          <p class="modalText">${escapeHtml(message)}</p>
+          <div class="modalActions">
+            <button class="btn" type="button" data-confirm-cancel>${escapeHtml(cancelText)}</button>
+            <button class="btn btn--primary ${danger ? "btn--dangerSolid" : ""}" type="button" data-confirm-ok>${escapeHtml(confirmText)}</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const cleanup = (value) => {
+      document.removeEventListener("keydown", onKeyDown);
+      root.innerHTML = "";
+      resolve(value);
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") cleanup(false);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    root.querySelector("[data-confirm-cancel]")?.addEventListener("click", () => cleanup(false));
+    root.querySelector("[data-confirm-ok]")?.addEventListener("click", () => cleanup(true));
+    root.querySelector(".modalBackdrop")?.addEventListener("click", (e) => {
+      if (e.target.classList.contains("modalBackdrop")) cleanup(false);
+    });
+    root.querySelector("[data-confirm-ok]")?.focus();
+  });
+}
+
 async function doDeletePost(id) {
   if (!isAuthed()) return;
-  if (!confirm("Opravdu smazat příspěvek?")) return;
+  const ok = await showConfirmDialog({
+    title: "Smazat příspěvek",
+    message: "Opravdu chceš tento příspěvek smazat? Tuto akci už nepůjde vrátit zpět.",
+    confirmText: "Ano, smazat",
+    cancelText: "Nechat být",
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     await api(`/posts/${encodeURIComponent(id)}`, { method: "DELETE", auth: true });
@@ -815,7 +921,14 @@ async function doDeletePost(id) {
 
 async function doDeleteComment(postId, commentId, page) {
   if (!isAuthed()) return;
-  if (!confirm("Opravdu smazat komentář?")) return;
+  const ok = await showConfirmDialog({
+    title: "Smazat komentář",
+    message: "Opravdu chceš tento komentář smazat?",
+    confirmText: "Ano, smazat",
+    cancelText: "Zrušit",
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     await api(`/comments/${encodeURIComponent(commentId)}`, { method: "DELETE", auth: true });
@@ -828,7 +941,14 @@ async function doDeleteComment(postId, commentId, page) {
 
 async function doAdminDeletePost(id, onDone) {
   if (!canAdminManage()) return showFlash("Na tohle nemáš oprávnění.", "err");
-  if (!confirm("Admin: opravdu smazat tento příspěvek?")) return;
+  const ok = await showConfirmDialog({
+    title: "Admin mazání příspěvku",
+    message: "Opravdu chceš jako admin smazat tento příspěvek?",
+    confirmText: "Smazat příspěvek",
+    cancelText: "Zrušit",
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     await api(`/admin/posts/${encodeURIComponent(id)}`, { method: "DELETE", auth: true });
@@ -841,7 +961,14 @@ async function doAdminDeletePost(id, onDone) {
 
 async function doAdminDeleteComment(id, onDone) {
   if (!canAdminManage()) return showFlash("Na tohle nemáš oprávnění.", "err");
-  if (!confirm("Admin: opravdu smazat tento komentář?")) return;
+  const ok = await showConfirmDialog({
+    title: "Admin mazání komentáře",
+    message: "Opravdu chceš jako admin smazat tento komentář?",
+    confirmText: "Smazat komentář",
+    cancelText: "Zrušit",
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     await api(`/admin/comments/${encodeURIComponent(id)}`, { method: "DELETE", auth: true });
@@ -854,7 +981,14 @@ async function doAdminDeleteComment(id, onDone) {
 
 async function doAdminDeleteUser(id, username, onDone) {
   if (!canAdminManage()) return showFlash("Na tohle nemáš oprávnění.", "err");
-  if (!confirm(`Admin: opravdu smazat uživatele ${username || ""}?`)) return;
+  const ok = await showConfirmDialog({
+    title: "Admin mazání uživatele",
+    message: `Opravdu chceš smazat uživatele ${username || ""}?`,
+    confirmText: "Smazat uživatele",
+    cancelText: "Zrušit",
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     await api(`/admin/users/${encodeURIComponent(id)}`, { method: "DELETE", auth: true });
