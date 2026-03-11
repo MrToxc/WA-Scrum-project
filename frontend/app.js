@@ -1,4 +1,15 @@
-import { api, getToken, setAuth, clearAuth, getUsername, getUserId, isAdmin } from "./api.js";
+import {
+  api,
+  getToken,
+  setAuth,
+  clearAuth,
+  getUsername,
+  getUserId,
+  isAdmin,
+  normalizeVoteState,
+  mergeVotedItem,
+  getAvatarUrl,
+} from "./api.js";
 
 const $app = document.getElementById("app");
 const $flash = document.getElementById("flash");
@@ -144,7 +155,16 @@ function resolveAuthor(obj) {
 }
 
 function buildAvatarUrl(author) {
-  return `https://avatars.laravel.cloud/${encodeURIComponent(String(author || "unknown"))}`;
+  return getAvatarUrl(author);
+}
+
+function normalizeEntity(entity) {
+  const normalized = normalizeVoteState(entity || {});
+  return {
+    ...entity,
+    ...normalized,
+    user_reaction: normalized.user_vote,
+  };
 }
 
 function timeAgo(dateString) {
@@ -202,13 +222,15 @@ function canAdminManage() {
 }
 
 function renderReactionControls(entity, kind) {
-  const ur = entity?.user_reaction;
+  const normalized = normalizeEntity(entity);
+  const ur = normalized?.user_vote;
+
   return `
-    <div class="pill--votes" title="Hlasování" data-vote-box data-kind="${kind}" data-id="${escapeHtml(entity.id)}">
-      <button class="voteBtn voteBtn--up ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="upvote" aria-label="Upvote">▲</button>
-      <span class="voteCount" data-role="upvotes">${Number(entity.upvotes_count ?? 0)}</span>
-      <button class="voteBtn voteBtn--down ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="downvote" aria-label="Downvote">▼</button>
-      <span class="voteCount" data-role="downvotes">${Number(entity.downvotes_count ?? 0)}</span>
+    <div class="pill--votes" title="Hlasování" data-vote-box data-kind="${kind}" data-id="${escapeHtml(normalized.id)}">
+      <button class="voteBtn voteBtn--up ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(normalized.id)}" data-type="upvote" aria-label="Upvote">▲</button>
+      <span class="voteCount" data-role="upvotes">${Number(normalized.upvotes_count ?? 0)}</span>
+      <button class="voteBtn voteBtn--down ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(normalized.id)}" data-type="downvote" aria-label="Downvote">▼</button>
+      <span class="voteCount" data-role="downvotes">${Number(normalized.downvotes_count ?? 0)}</span>
     </div>
   `;
 }
@@ -307,9 +329,10 @@ function route() {
 
 window.addEventListener("hashchange", route);
 
-function patchVoteBox({ kind, id, type }) {
+function patchVoteBoxOptimistic({ kind, id, type }) {
   const selector = `[data-vote-box][data-kind="${kind}"][data-id="${CSS.escape(String(id))}"]`;
   const boxes = document.querySelectorAll(selector);
+
   boxes.forEach((box) => {
     const upBtn = box.querySelector('[data-type="upvote"]');
     const downBtn = box.querySelector('[data-type="downvote"]');
@@ -319,6 +342,7 @@ function patchVoteBox({ kind, id, type }) {
 
     let up = Number(upCount.textContent || 0);
     let down = Number(downCount.textContent || 0);
+
     const wasUp = upBtn.classList.contains("is-active");
     const wasDown = downBtn.classList.contains("is-active");
 
@@ -329,6 +353,7 @@ function patchVoteBox({ kind, id, type }) {
       } else {
         up += 1;
         upBtn.classList.add("is-active");
+
         if (wasDown) {
           down = Math.max(0, down - 1);
           downBtn.classList.remove("is-active");
@@ -343,6 +368,7 @@ function patchVoteBox({ kind, id, type }) {
       } else {
         down += 1;
         downBtn.classList.add("is-active");
+
         if (wasUp) {
           up = Math.max(0, up - 1);
           upBtn.classList.remove("is-active");
@@ -361,12 +387,18 @@ async function handleVoteClick({ btn, kind, id, type }) {
 
   try {
     if (btn) btn.dataset.loading = "1";
+
     const path = kind === "post"
       ? `/posts/${encodeURIComponent(id)}/reactions`
       : `/comments/${encodeURIComponent(id)}/reactions`;
 
-    await api(path, { method: "POST", auth: true, body: { type } });
-    patchVoteBox({ kind, id, type });
+    await api(path, {
+      method: "POST",
+      auth: true,
+      body: { type },
+    });
+
+    patchVoteBoxOptimistic({ kind, id, type });
   } catch (e) {
     showFlash(e.message, "err");
   } finally {
@@ -403,7 +435,7 @@ async function renderPosts({ page = 1 } = {}) {
   try {
     const perPage = 10;
     const payload = await api(`/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`, { auth: isAuthed() });
-    const posts = payload?.data ?? [];
+    const posts = (payload?.data ?? []).map(normalizeEntity);
     const meta = getPageMeta(payload?.meta ?? {});
 
     if (!posts.length) {
@@ -644,9 +676,9 @@ async function renderPostDetail(id, { page = 1 } = {}) {
 
   try {
     const postWrap = await api(`/posts/${encodeURIComponent(id)}`, { auth: isAuthed() });
-    const p = postWrap?.data;
+    const p = normalizeEntity(postWrap?.data);
     const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments?page=${encodeURIComponent(page)}&per_page=10`, { auth: isAuthed() });
-    const comments = commentsWrap?.data ?? [];
+    const comments = (commentsWrap?.data ?? []).map(normalizeEntity);
     const commentsMeta = getPageMeta(commentsWrap?.meta ?? {});
     const author = resolveAuthor(p);
 
