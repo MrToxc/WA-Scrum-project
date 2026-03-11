@@ -5,8 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="52d30951-b47d-4950-8695-a70b6207d87c" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../forum-api-app/app/Providers/AppServiceProvider.php" beforeDir="false" afterPath="$PROJECT_DIR$/../forum-api-app/app/Providers/AppServiceProvider.php" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../forum-api-app/routes/api.php" beforeDir="false" afterPath="$PROJECT_DIR$/../forum-api-app/routes/api.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../forum-api-app/app/Http/Controllers/CommentController.php" beforeDir="false" afterPath="$PROJECT_DIR$/../forum-api-app/app/Http/Controllers/CommentController.php" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api.js" beforeDir="false" afterPath="$PROJECT_DIR$/api.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -40,6 +41,7 @@
   &quot;keyToString&quot;: {
     &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
@@ -73,6 +75,8 @@
       <workItem from="1771962769007" duration="1011000" />
       <workItem from="1771963943631" duration="67000" />
       <workItem from="1772666699023" duration="16000" />
+      <workItem from="1772666715903" duration="701000" />
+      <workItem from="1773253122374" duration="1242000" />
     </task>
     <servers />
   </component>

@@ -120,6 +120,7 @@ Every post response includes:
 Returns a paginated list of all posts, newest first.
 
 **Query params:**
+- `page` (optional, default: 1) — which page of results to return
 - `per_page` (optional, default: 10, min: 10, max: 50)
 
 **200 Response:**
@@ -279,7 +280,11 @@ Every comment response includes:
 
 ### GET /posts/{post}/comments
 
-Returns all comments for a specific post, newest first. Not paginated — returns all comments at once.
+Returns a paginated list of comments for a specific post, newest first.
+
+**Query params:**
+- `page` (optional, default: 1) — which page of results to return
+- `per_page` (optional, default: 10, min: 10, max: 50)
 
 **200 Response:**
 ```json
@@ -297,7 +302,13 @@ Returns all comments for a specific post, newest first. Not paginated — return
       "downvotes_count": 0,
       "user_reaction": "upvote"
     }
-  ]
+  ],
+  "meta": {
+    "page": 1,
+    "last_page": 1,
+    "per_page": 10,
+    "total": 1
+  }
 }
 ```
 
@@ -559,7 +570,7 @@ Validation failed. The `errors` object contains field-specific error messages.
 | POST | /posts | ✓ | Create post |
 | PUT | /posts/{post} | ✓ | Update post (author only) |
 | DELETE | /posts/{post} | ✓ | Delete post (author only) |
-| GET | /posts/{post}/comments | ✗ | List comments for post |
+| GET | /posts/{post}/comments | ✗ | List comments for post (paginated) |
 | POST | /posts/{post}/comments | ✓ | Create comment on post |
 | PUT | /comments/{comment} | ✓ | Update comment (author only) |
 | DELETE | /comments/{comment} | ✓ | Delete comment (author only) |

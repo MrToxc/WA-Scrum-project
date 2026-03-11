@@ -14,6 +14,11 @@ class CommentController extends Controller
      */
     public function index(Post $post, Request $request)
     {
+        $perPage = $request->query('per_page', 10);
+
+        // bezpečný rozsah
+        $perPage = max(10, min(50, (int) $perPage));
+
         $query = $post->comments()
             ->with(['user:id,username'])
             ->withCount([
@@ -31,10 +36,10 @@ class CommentController extends Controller
             ]);
         }
 
-        $comments = $query->get();
+        $paginator = $query->paginate($perPage);
 
         // map user_reaction onto each comment
-        $comments->transform(function ($comment) use ($request) {
+        $items = collect($paginator->items())->map(function ($comment) use ($request) {
             $comment->user_reaction = $request->user()
                 ? ($comment->reactions->first()?->type)
                 : null;
@@ -42,7 +47,15 @@ class CommentController extends Controller
             return $comment;
         });
         // CHATGPT code end
-        return response()->json(['data' => $comments]);
+        return response()->json([
+            'data' => $items,
+            'meta' => [
+                'page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ]);
     }
 
     /**
