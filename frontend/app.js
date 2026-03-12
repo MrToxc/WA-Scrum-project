@@ -32,21 +32,6 @@ function getCookie(name) {
 function setCookie(name, value, maxAgeSeconds = 60 * 60 * 24 * 365) {
   document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}`;
 }
-function getUserReaction(entity) {
-  return entity?.user_reaction ?? entity?.user_vote ?? null;
-}
-
-function renderReactionControls(entity, kind) {
-  const ur = getUserReaction(entity);
-  return `
-    <div class="pill--votes" title="Hlasování" data-vote-box data-kind="${kind}" data-id="${escapeHtml(entity.id)}">
-      <button class="voteBtn voteBtn--up ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="upvote" aria-label="Upvote">▲</button>
-      <span class="voteCount" data-role="upvotes">${Number(entity.upvotes_count ?? 0)}</span>
-      <button class="voteBtn voteBtn--down ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="downvote" aria-label="Downvote">▼</button>
-      <span class="voteCount" data-role="downvotes">${Number(entity.downvotes_count ?? 0)}</span>
-    </div>
-  `;
-}
 
 function showCookieBanner() {
   const banner = document.getElementById("cookieBanner");
@@ -237,16 +222,19 @@ function canAdminManage() {
 }
 
 function renderReactionControls(entity, kind) {
-  const ur = getUserReaction(entity);
+  const normalized = normalizeEntity(entity);
+  const ur = normalized?.user_vote;
+
   return `
-    <div class="pill--votes" title="Hlasování" data-vote-box data-kind="${kind}" data-id="${escapeHtml(entity.id)}">
-      <button class="voteBtn voteBtn--up ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="upvote" aria-label="Upvote">▲</button>
-      <span class="voteCount" data-role="upvotes">${Number(entity.upvotes_count ?? 0)}</span>
-      <button class="voteBtn voteBtn--down ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="downvote" aria-label="Downvote">▼</button>
-      <span class="voteCount" data-role="downvotes">${Number(entity.downvotes_count ?? 0)}</span>
+    <div class="pill--votes" title="Hlasování" data-vote-box data-kind="${kind}" data-id="${escapeHtml(normalized.id)}">
+      <button class="voteBtn voteBtn--up ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(normalized.id)}" data-type="upvote" aria-label="Upvote">▲</button>
+      <span class="voteCount" data-role="upvotes">${Number(normalized.upvotes_count ?? 0)}</span>
+      <button class="voteBtn voteBtn--down ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(normalized.id)}" data-type="downvote" aria-label="Downvote">▼</button>
+      <span class="voteCount" data-role="downvotes">${Number(normalized.downvotes_count ?? 0)}</span>
     </div>
   `;
 }
+
 function renderAuthor(author) {
   const safeAuthor = escapeHtml(author);
   const avatarUrl = escapeHtml(buildAvatarUrl(author));
@@ -410,7 +398,7 @@ async function handleVoteClick({ btn, kind, id, type }) {
       body: { type },
     });
 
-    await route();
+    patchVoteBoxOptimistic({ kind, id, type });
   } catch (e) {
     showFlash(e.message, "err");
   } finally {
@@ -447,10 +435,7 @@ async function renderPosts({ page = 1 } = {}) {
   try {
     const perPage = 10;
     const payload = await api(`/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`, { auth: isAuthed() });
-    const posts = (payload?.data ?? []).map((p) => ({
-  ...p,
-  user_reaction: p?.user_reaction ?? p?.user_vote ?? null,
-}));
+    const posts = (payload?.data ?? []).map(normalizeEntity);
     const meta = getPageMeta(payload?.meta ?? {});
 
     if (!posts.length) {
@@ -533,7 +518,7 @@ function renderLogin() {
         <div class="pwReveal">
           <input id="loginPassword" class="pwReveal__input" type="password" name="password" required minlength="3" placeholder="vložit heslo" />
           <button class="btn pwReveal__btn" type="button" id="btnToggleLoginPw" aria-label="Ukázat/skrýt heslo">👁️</button>
-          
+          <button class="btn pwReveal__btn" type="button" id="btnCopyLoginPw" aria-label="Kopírovat heslo">📋</button>
         </div>
         <div style="height:10px"></div>
         <button class="btn btn--primary" type="submit">Přihlásit</button>
@@ -691,15 +676,9 @@ async function renderPostDetail(id, { page = 1 } = {}) {
 
   try {
     const postWrap = await api(`/posts/${encodeURIComponent(id)}`, { auth: isAuthed() });
-    const p = {
-      ...(postWrap?.data || {}),
-      user_reaction: postWrap?.data?.user_reaction ?? postWrap?.data?.user_vote ?? null,
-    };
+    const p = normalizeEntity(postWrap?.data);
     const commentsWrap = await api(`/posts/${encodeURIComponent(id)}/comments?page=${encodeURIComponent(page)}&per_page=10`, { auth: isAuthed() });
-    const comments = (commentsWrap?.data ?? []).map((c) => ({
-      ...c,
-      user_reaction: c?.user_reaction ?? c?.user_vote ?? null,
-    }));
+    const comments = (commentsWrap?.data ?? []).map(normalizeEntity);
     const commentsMeta = getPageMeta(commentsWrap?.meta ?? {});
     const author = resolveAuthor(p);
 
@@ -1054,8 +1033,6 @@ async function doAdminDeleteUser(id, username, onDone) {
 
 async function hydrateAuthFromMe() {
   if (!getToken()) return;
-
-
 
   try {
     const me = await api("/auth/me", { auth: true });
