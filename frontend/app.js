@@ -518,7 +518,6 @@ function renderLogin() {
         <div class="pwReveal">
           <input id="loginPassword" class="pwReveal__input" type="password" name="password" required minlength="3" placeholder="vložit heslo" />
           <button class="btn pwReveal__btn" type="button" id="btnToggleLoginPw" aria-label="Ukázat/skrýt heslo">👁️</button>
-          <button class="btn pwReveal__btn" type="button" id="btnCopyLoginPw" aria-label="Kopírovat heslo">📋</button>
         </div>
         <div style="height:10px"></div>
         <button class="btn btn--primary" type="submit">Přihlásit</button>
