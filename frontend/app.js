@@ -35,8 +35,17 @@ function setCookie(name, value, maxAgeSeconds = 60 * 60 * 24 * 365) {
 function getUserReaction(entity) {
   return entity?.user_reaction ?? entity?.user_vote ?? null;
 }
-function getUserReaction(entity) {
-  return entity?.user_reaction ?? entity?.user_vote ?? null;
+
+function renderReactionControls(entity, kind) {
+  const ur = getUserReaction(entity);
+  return `
+    <div class="pill--votes" title="Hlasování" data-vote-box data-kind="${kind}" data-id="${escapeHtml(entity.id)}">
+      <button class="voteBtn voteBtn--up ${ur === "upvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="upvote" aria-label="Upvote">▲</button>
+      <span class="voteCount" data-role="upvotes">${Number(entity.upvotes_count ?? 0)}</span>
+      <button class="voteBtn voteBtn--down ${ur === "downvote" ? "is-active" : ""}" data-action="vote" data-kind="${kind}" data-id="${escapeHtml(entity.id)}" data-type="downvote" aria-label="Downvote">▼</button>
+      <span class="voteCount" data-role="downvotes">${Number(entity.downvotes_count ?? 0)}</span>
+    </div>
+  `;
 }
 
 function showCookieBanner() {
@@ -401,7 +410,7 @@ async function handleVoteClick({ btn, kind, id, type }) {
       body: { type },
     });
 
-    patchVoteBoxOptimistic({ kind, id, type });
+    await route();
   } catch (e) {
     showFlash(e.message, "err");
   } finally {
