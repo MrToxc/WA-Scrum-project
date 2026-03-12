@@ -158,26 +158,12 @@ function buildAvatarUrl(author) {
   return getAvatarUrl(author);
 }
 
-export function normalizeVoteState(item) {
+function normalizeEntity(entity) {
+  const normalized = normalizeVoteState(entity || {});
   return {
-    ...item,
-    user_vote:
-      item?.user_vote ??
-      item?.user_reaction ??
-      item?.userReaction ??
-      item?.current_user_vote ??
-      item?.my_vote ??
-      null,
-    upvotes_count:
-      item?.upvotes_count ??
-      item?.upvotes ??
-      item?.likes_count ??
-      0,
-    downvotes_count:
-      item?.downvotes_count ??
-      item?.downvotes ??
-      item?.dislikes_count ??
-      0,
+    ...entity,
+    ...normalized,
+    user_reaction: normalized.user_vote,
   };
 }
 
@@ -237,7 +223,7 @@ function canAdminManage() {
 
 function renderReactionControls(entity, kind) {
   const normalized = normalizeEntity(entity);
-  const ur = normalized.user_vote;
+  const ur = normalized?.user_vote;
 
   return `
     <div class="pill--votes" title="Hlasování" data-vote-box data-kind="${kind}" data-id="${escapeHtml(normalized.id)}">
@@ -367,6 +353,7 @@ function patchVoteBoxOptimistic({ kind, id, type }) {
       } else {
         up += 1;
         upBtn.classList.add("is-active");
+
         if (wasDown) {
           down = Math.max(0, down - 1);
           downBtn.classList.remove("is-active");
@@ -381,6 +368,7 @@ function patchVoteBoxOptimistic({ kind, id, type }) {
       } else {
         down += 1;
         downBtn.classList.add("is-active");
+
         if (wasUp) {
           up = Math.max(0, up - 1);
           upBtn.classList.remove("is-active");
@@ -530,6 +518,7 @@ function renderLogin() {
         <div class="pwReveal">
           <input id="loginPassword" class="pwReveal__input" type="password" name="password" required minlength="3" placeholder="vložit heslo" />
           <button class="btn pwReveal__btn" type="button" id="btnToggleLoginPw" aria-label="Ukázat/skrýt heslo">👁️</button>
+          
         </div>
         <div style="height:10px"></div>
         <button class="btn btn--primary" type="submit">Přihlásit</button>

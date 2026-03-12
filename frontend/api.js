@@ -131,7 +131,6 @@ export function normalizeVoteState(item) {
     ...item,
     user_vote:
       item?.user_vote ??
-      item?.user_reaction ??
       item?.userReaction ??
       item?.current_user_vote ??
       item?.my_vote ??
