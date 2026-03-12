@@ -32,6 +32,12 @@ function getCookie(name) {
 function setCookie(name, value, maxAgeSeconds = 60 * 60 * 24 * 365) {
   document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}`;
 }
+function getUserReaction(entity) {
+  return entity?.user_reaction ?? entity?.user_vote ?? null;
+}
+function getUserReaction(entity) {
+  return entity?.user_reaction ?? entity?.user_vote ?? null;
+}
 
 function showCookieBanner() {
   const banner = document.getElementById("cookieBanner");
@@ -1040,12 +1046,7 @@ async function doAdminDeleteUser(id, username, onDone) {
 async function hydrateAuthFromMe() {
   if (!getToken()) return;
 
-function getUserReaction(entity) {
-  return entity?.user_reaction ?? entity?.user_vote ?? null;
-}
-function getUserReaction(entity) {
-  return entity?.user_reaction ?? entity?.user_vote ?? null;
-}
+
 
   try {
     const me = await api("/auth/me", { auth: true });
