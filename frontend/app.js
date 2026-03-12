@@ -1043,6 +1043,9 @@ async function hydrateAuthFromMe() {
 function getUserReaction(entity) {
   return entity?.user_reaction ?? entity?.user_vote ?? null;
 }
+function getUserReaction(entity) {
+  return entity?.user_reaction ?? entity?.user_vote ?? null;
+}
 
   try {
     const me = await api("/auth/me", { auth: true });
