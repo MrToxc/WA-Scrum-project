@@ -25,12 +25,13 @@ class UtmVisitController extends Controller
         ]);
 
         // At least one UTM field must be present
+        /*
         if (!$request->utm_source && !$request->utm_medium && !$request->utm_campaign) {
             return response()->json([
                 'message' => 'At least one UTM parameter (utm_source, utm_medium, or utm_campaign) is required.',
             ], 422);
         }
-
+*/
         // Resolve user from Sanctum token if present (without requiring auth)
         $user = Auth::guard('sanctum')->user();
 
