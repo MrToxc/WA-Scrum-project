@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\PassphraseGenerator;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -22,10 +22,8 @@ class AuthController extends Controller
             'username' => ['required', 'string', 'min:3', 'max:50', 'alpha_dash', 'unique:users,username'],
         ]);
 
-        // vygenerujeme silné heslo
-        $plainPassword = method_exists(Str::class, 'password')
-            ? Str::password(20)
-            : Str::random(20);
+        // vygenerujeme heslovou frázi (5 náhodných českých slov)
+        $plainPassword = PassphraseGenerator::generate();
 
         // lookup otisk: deterministický (stejné heslo => stejný lookup),
         // ale bez APP_KEY nejde jednoduše zkoušet "duhové tabulky"
@@ -34,9 +32,7 @@ class AuthController extends Controller
         // EXTRA POJISTKA: kdyby náhodou narazil lookup na existující (extrémně nepravděpodobné),
         // přegenerujeme heslo znovu
         while (User::where('password_lookup', $lookup)->exists()) {
-            $plainPassword = method_exists(Str::class, 'password')
-                ? Str::password(20)
-                : Str::random(20);
+            $plainPassword = PassphraseGenerator::generate();
 
             $lookup = hash_hmac('sha256', $plainPassword, config('app.key'));
         }
