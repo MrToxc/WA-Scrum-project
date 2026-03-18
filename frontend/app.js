@@ -9,6 +9,7 @@ import {
   normalizeVoteState,
   mergeVotedItem,
   getAvatarUrl,
+  trackUtm,
 } from "./api.js";
 
 const $app = document.getElementById("app");
@@ -27,6 +28,13 @@ function getCookie(name) {
     new RegExp("(?:^|; )" + name.replace(/([.$?*|{}()\[\]\\\/\+^])/g, "\\$1") + "=([^;]*)")
   );
   return m ? decodeURIComponent(m[1]) : null;
+}
+function formatCommentsCount(count) {
+  const n = Number(count ?? 0);
+
+  if (n === 1) return "1 komentář";
+  if (n >= 2 && n <= 4) return `${n} komentáře`;
+  return `${n} komentářů`;
 }
 
 function setCookie(name, value, maxAgeSeconds = 60 * 60 * 24 * 365) {
@@ -85,11 +93,7 @@ function saveUtmToCookies(utm) {
 }
 
 function sendUtmToBackend(utm) {
-  fetch("/api/v1/track", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(utm),
-  }).catch(() => {});
+  trackUtm(utm).catch(() => {});
 }
 
 function maybeTrackUtm() {
@@ -448,14 +452,16 @@ async function renderPosts({ page = 1 } = {}) {
         <div class="muted">Veřejné čtení • Porušení pravidel může být moderováno.</div>
       </div>
     </div>
+
     <div class="card muted">Načítám…</div>
   `;
 
   try {
     const perPage = 10;
     const payload = await api(`/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`, {
-      auth: isAuthed()
+      auth: isAuthed(),
     });
+
     const posts = payload?.data ?? [];
     const meta = getPageMeta(payload?.meta ?? {});
 
@@ -470,36 +476,69 @@ async function renderPosts({ page = 1 } = {}) {
 
     $app.innerHTML = `
       <div class="list">
-        ${posts.map((p) => {
-          const author = resolveAuthor(p);
-          return `
-            <div class="card postCard">
-              <div class="row cardHead">
-                <div style="flex:1; min-width:0;">
-                  <a href="#/post/${encodeURIComponent(p.id)}" class="postLink">
-                    <h2 class="postTitle">${escapeHtml(p.title)}</h2>
-                  </a>
-                  <div class="metaRow">
-                    ${renderAuthor(author)}
-                    <div class="muted">• ${escapeHtml(timeAgo(p.created_at))}</div>
-                    <div class="muted">• ${Number(p.comments_count ?? 0)} komentářů</div>
+        ${posts
+          .map((p) => {
+            const author = resolveAuthor(p);
+
+            return `
+              <article class="card postCard">
+                <div class="row cardHead cardHead--post">
+                  <div class="postCard__main">
+                    <a href="#/post/${encodeURIComponent(p.id)}" class="postLink">
+                      <h2 class="postTitle">${escapeHtml(p.title)}</h2>
+                    </a>
+
+                    <div class="metaRow metaRow--post">
+                      <div class="metaRow__author">
+                        ${renderAuthor(author)}
+                      </div>
+
+                      <div class="metaInfo">
+                        <span class="metaChip">
+                          <span class="metaChip__icon">🕒</span>
+                          <span>${escapeHtml(timeAgo(p.created_at))}</span>
+                        </span>
+
+                        <span class="metaDot">•</span>
+
+                        <span class="metaChip">
+                          <span class="metaChip__icon">💬</span>
+                          <span>${formatCommentsCount(p.comments_count)}</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="postCard__votes">
+                    ${renderReactionControls(p, "post")}
                   </div>
                 </div>
-                ${renderReactionControls(p, "post")}
-              </div>
 
-              <div class="postBody postBody--preview">${escapeHtml(p.body || "")}</div>
-              <a class="postMoreLink" href="#/post/${encodeURIComponent(p.id)}">Zobrazit celý příspěvek →</a>
-              ${renderPostActions(p)}
-            </div>
-          `;
-        }).join("")}
+                <div class="postBody postBody--preview">${escapeHtml(p.body || "")}</div>
+
+                <div class="postCard__footer">
+                  <a class="postMoreLink" href="#/post/${encodeURIComponent(p.id)}">
+                    Zobrazit celý příspěvek →
+                  </a>
+
+                  ${renderPostActions(p)}
+                </div>
+              </article>
+            `;
+          })
+          .join("")}
       </div>
 
       <div class="row pagerRow">
-        <a class="btn ${meta.current <= 1 ? "is-disabled" : ""}" href="#/?page=${Math.max(1, meta.current - 1)}">← Předchozí</a>
+        <a class="btn ${meta.current <= 1 ? "is-disabled" : ""}" href="#/?page=${Math.max(1, meta.current - 1)}">
+          ← Předchozí
+        </a>
+
         <div class="muted">Strana ${meta.current} / ${meta.last}</div>
-        <a class="btn ${meta.current >= meta.last ? "is-disabled" : ""}" href="#/?page=${Math.min(meta.last, meta.current + 1)}">Další →</a>
+
+        <a class="btn ${meta.current >= meta.last ? "is-disabled" : ""}" href="#/?page=${Math.min(meta.last, meta.current + 1)}">
+          Další →
+        </a>
       </div>
     `;
 
@@ -508,7 +547,6 @@ async function renderPosts({ page = 1 } = {}) {
     renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
-    renderAuthUI();
   }
 }
 
