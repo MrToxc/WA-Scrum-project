@@ -893,7 +893,6 @@ async function renderPostDetail(id) {
     }
 
     bindVoteButtons();
-    bindPostDetailActions(id);
     renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
