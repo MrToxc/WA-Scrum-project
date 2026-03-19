@@ -1,7 +1,7 @@
 :root {
   --border: #e5e7eb;
   --text: #0f172a;
-  --muted: #64748b;
+  --muted: #475569;
   --bg: #ffffff;
   --bg2: #f8fafc;
   --input-bg: #ffffff;
@@ -14,12 +14,13 @@
   --danger: #dc2626;
   --danger-border: rgba(248, 113, 113, 0.4);
   --danger-bg: rgba(254, 226, 226, 0.8);
+  --card-text: #0f172a;
 }
 
 html.dark {
   --border: rgba(148, 163, 184, 0.25);
-  --text: #e5e7eb;
-  --muted: #94a3b8;
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.72);
   --bg: #071121;
   --bg2: #0f172a;
   --input-bg: #0b1220;
@@ -31,6 +32,7 @@ html.dark {
   --primary-bg: rgba(99, 102, 241, 0.18);
   --danger-border: rgba(248, 113, 113, 0.35);
   --danger-bg: rgba(127, 29, 29, 0.25);
+  --card-text: rgba(255, 255, 255, 0.92);
 }
 
 * { box-sizing: border-box; }
@@ -842,7 +844,7 @@ input {
   flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
   font-size: 0.95rem;
 }
 
@@ -870,7 +872,7 @@ input {
 .postBody {
   margin-top: 16px;
   line-height: 1.65;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--text);
 }
 
 .postCard__footer {
