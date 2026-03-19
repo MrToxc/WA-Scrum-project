@@ -741,45 +741,18 @@ async function renderPostDetail(id, { page = 1 } = {}) {
     const post = normalizeVoteState(raw?.data ?? raw);
     const author = resolveAuthor(post);
 
-    let comments =
-      Array.isArray(post.comments) ? post.comments :
-      Array.isArray(post.comments?.data) ? post.comments.data :
-      Array.isArray(raw?.data?.comments) ? raw.data.comments :
-      Array.isArray(raw?.data?.comments?.data) ? raw.data.comments.data :
-      Array.isArray(raw?.comments) ? raw.comments :
-      Array.isArray(raw?.comments?.data) ? raw.comments.data :
-      Array.isArray(raw?.data?.post_comments) ? raw.data.post_comments :
+    const commentsRaw = await api(`/posts/${id}/comments`, { auth: isAuthed() });
+    const comments =
+      Array.isArray(commentsRaw?.data) ? commentsRaw.data :
+      Array.isArray(commentsRaw?.data?.data) ? commentsRaw.data.data :
       [];
 
-    if (!comments.length) {
-      try {
-        const commentsRaw = await api(`/comments?post_id=${encodeURIComponent(id)}`, {
-          auth: isAuthed(),
-        });
-
-        comments =
-          Array.isArray(commentsRaw?.data) ? commentsRaw.data :
-          Array.isArray(commentsRaw?.data?.data) ? commentsRaw.data.data :
-          Array.isArray(commentsRaw) ? commentsRaw :
-          [];
-      } catch (_) {}
-    }
-
-    if (!comments.length) {
-      try {
-        const commentsRaw = await api(`/comments`, { auth: isAuthed() });
-
-        const allComments =
-          Array.isArray(commentsRaw?.data) ? commentsRaw.data :
-          Array.isArray(commentsRaw?.data?.data) ? commentsRaw.data.data :
-          Array.isArray(commentsRaw) ? commentsRaw :
-          [];
-
-        comments = allComments.filter((c) => Number(c.post_id) === Number(id));
-      } catch (_) {}
-    }
-
-    const commentsCount = post.comments_count ?? comments.length ?? 0;
+    const commentsMeta = commentsRaw?.meta ?? commentsRaw?.data?.meta ?? null;
+    const commentsCount =
+      post.comments_count ??
+      commentsMeta?.total ??
+      comments.length ??
+      0;
 
     $app.innerHTML = `
       <div class="detailPage">
@@ -833,7 +806,7 @@ async function renderPostDetail(id, { page = 1 } = {}) {
                   <textarea
                     name="body"
                     rows="4"
-                    maxlength="1000"
+                    maxlength="2000"
                     placeholder="Napiš komentář..."
                     required
                   ></textarea>
@@ -852,39 +825,37 @@ async function renderPostDetail(id, { page = 1 } = {}) {
           <div class="list commentsList">
             ${
               comments.length
-                ? comments
-                    .map((c) => {
-                      const comment = normalizeVoteState(c);
-                      const commentAuthor = resolveAuthor(comment);
+                ? comments.map((c) => {
+                    const comment = normalizeVoteState(c);
+                    const commentAuthor = resolveAuthor(comment);
 
-                      return `
-                        <article class="card commentCard" data-comment-id="${comment.id}">
-                          <div class="commentCard__head">
-                            <div class="commentCard__meta">
-                              ${renderAuthor(commentAuthor)}
+                    return `
+                      <article class="card commentCard" data-comment-id="${comment.id}">
+                        <div class="commentCard__head">
+                          <div class="commentCard__meta">
+                            ${renderAuthor(commentAuthor)}
 
-                              <div class="metaInfo">
-                                <span class="metaChip">
-                                  <span class="metaChip__icon">🕒</span>
-                                  <span>${escapeHtml(timeAgo(comment.created_at))}</span>
-                                </span>
-                              </div>
-                            </div>
-
-                            <div class="commentCard__votes">
-                              ${renderReactionControls(comment, "comment")}
+                            <div class="metaInfo">
+                              <span class="metaChip">
+                                <span class="metaChip__icon">🕒</span>
+                                <span>${escapeHtml(timeAgo(comment.created_at))}</span>
+                              </span>
                             </div>
                           </div>
 
-                          <div class="commentBody">
-                            ${escapeHtml(comment.body || "").replace(/\n/g, "<br>")}
+                          <div class="commentCard__votes">
+                            ${renderReactionControls(comment, "comment")}
                           </div>
+                        </div>
 
-                          ${renderCommentActions(comment)}
-                        </article>
-                      `;
-                    })
-                    .join("")
+                        <div class="commentBody">
+                          ${escapeHtml(comment.body || "").replace(/\n/g, "<br>")}
+                        </div>
+
+                        ${typeof renderCommentActions === "function" ? renderCommentActions(comment) : ""}
+                      </article>
+                    `;
+                  }).join("")
                 : `<div class="card muted">Zatím žádné komentáře.</div>`
             }
           </div>
@@ -892,8 +863,46 @@ async function renderPostDetail(id, { page = 1 } = {}) {
       </div>
     `;
 
+    const commentForm = document.getElementById("newCommentForm");
+    if (commentForm) {
+      commentForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const fd = new FormData(commentForm);
+        const body = String(fd.get("body") || "").trim();
+        if (!body) return;
+
+        const submitBtn = commentForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn?.textContent || "Přidat komentář";
+
+        try {
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Odesílám…";
+          }
+
+          await api(`/posts/${id}/comments`, {
+            method: "POST",
+            auth: true,
+            body: { body },
+          });
+
+          await renderPostDetail(id, { page });
+        } catch (err) {
+          alert(err.message || "Nepodařilo se přidat komentář.");
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+          }
+        }
+      });
+    }
+
     bindVoteButtons();
-    bindDetailActions(id, page);
+    if (typeof bindDetailActions === "function") {
+      bindDetailActions(id, page);
+    }
     renderAuthUI();
   } catch (e) {
     $app.innerHTML = `
