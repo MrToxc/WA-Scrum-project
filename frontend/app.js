@@ -739,11 +739,27 @@ async function renderPostDetail(id) {
     const post = normalizeVoteState(raw?.data ?? raw);
     const author = resolveAuthor(post);
 
-    const comments = Array.isArray(post.comments) ? post.comments : [];
-    const commentsCount =
-      post.comments_count ??
-      comments.length ??
-      0;
+    let comments =
+      Array.isArray(post.comments) ? post.comments :
+      Array.isArray(raw?.data?.comments) ? raw.data.comments :
+      Array.isArray(raw?.data?.comments?.data) ? raw.data.comments.data :
+      Array.isArray(raw?.comments) ? raw.comments :
+      [];
+
+    if (!comments.length && Number(post.comments_count || 0) > 0) {
+      try {
+        const commentsRaw = await api(`/posts/${id}/comments`, { auth: isAuthed() });
+        comments =
+          Array.isArray(commentsRaw?.data) ? commentsRaw.data :
+          Array.isArray(commentsRaw?.data?.comments) ? commentsRaw.data.comments :
+          Array.isArray(commentsRaw) ? commentsRaw :
+          [];
+      } catch (e) {
+        comments = [];
+      }
+    }
+
+    const commentsCount = post.comments_count ?? comments.length ?? 0;
 
     $app.innerHTML = `
       <div class="detailPage">
@@ -844,7 +860,7 @@ async function renderPostDetail(id) {
                             ${escapeHtml(comment.body || "").replace(/\n/g, "<br>")}
                           </div>
 
-                          ${renderCommentActions(comment, post.id)}
+                          ${typeof renderCommentActions === "function" ? renderCommentActions(comment, post.id) : ""}
                         </article>
                       `;
                     })
@@ -860,9 +876,9 @@ async function renderPostDetail(id) {
     if (commentForm) {
       commentForm.addEventListener("submit", async (e) => {
         e.preventDefault();
+
         const fd = new FormData(commentForm);
         const body = String(fd.get("body") || "").trim();
-
         if (!body) return;
 
         const submitBtn = commentForm.querySelector('button[type="submit"]');
