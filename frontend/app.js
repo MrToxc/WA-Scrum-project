@@ -731,8 +731,10 @@ function renderNewPost() {
   });
 }
 
-async function renderPostDetail(id) {
-  $app.innerHTML = `<div class="card muted">Načítám příspěvek…</div>`;
+async function renderPostDetail(id, { page = 1 } = {}) {
+  $app.innerHTML = `
+    <div class="card muted">Načítám příspěvek…</div>
+  `;
 
   try {
     const raw = await api(`/posts/${id}`, { auth: isAuthed() });
@@ -741,22 +743,40 @@ async function renderPostDetail(id) {
 
     let comments =
       Array.isArray(post.comments) ? post.comments :
+      Array.isArray(post.comments?.data) ? post.comments.data :
       Array.isArray(raw?.data?.comments) ? raw.data.comments :
       Array.isArray(raw?.data?.comments?.data) ? raw.data.comments.data :
       Array.isArray(raw?.comments) ? raw.comments :
+      Array.isArray(raw?.comments?.data) ? raw.comments.data :
+      Array.isArray(raw?.data?.post_comments) ? raw.data.post_comments :
       [];
 
-    if (!comments.length && Number(post.comments_count || 0) > 0) {
+    if (!comments.length) {
       try {
-        const commentsRaw = await api(`/posts/${id}/comments`, { auth: isAuthed() });
+        const commentsRaw = await api(`/comments?post_id=${encodeURIComponent(id)}`, {
+          auth: isAuthed(),
+        });
+
         comments =
           Array.isArray(commentsRaw?.data) ? commentsRaw.data :
-          Array.isArray(commentsRaw?.data?.comments) ? commentsRaw.data.comments :
+          Array.isArray(commentsRaw?.data?.data) ? commentsRaw.data.data :
           Array.isArray(commentsRaw) ? commentsRaw :
           [];
-      } catch (e) {
-        comments = [];
-      }
+      } catch (_) {}
+    }
+
+    if (!comments.length) {
+      try {
+        const commentsRaw = await api(`/comments`, { auth: isAuthed() });
+
+        const allComments =
+          Array.isArray(commentsRaw?.data) ? commentsRaw.data :
+          Array.isArray(commentsRaw?.data?.data) ? commentsRaw.data.data :
+          Array.isArray(commentsRaw) ? commentsRaw :
+          [];
+
+        comments = allComments.filter((c) => Number(c.post_id) === Number(id));
+      } catch (_) {}
     }
 
     const commentsCount = post.comments_count ?? comments.length ?? 0;
@@ -764,7 +784,7 @@ async function renderPostDetail(id) {
     $app.innerHTML = `
       <div class="detailPage">
         <div class="row">
-          <a class="btn" href="#/">← Zpět</a>
+          <a class="btn" href="#/?page=${page}">← Zpět</a>
         </div>
 
         <article class="card postCard postCard--detail">
@@ -809,7 +829,7 @@ async function renderPostDetail(id) {
           ${
             isAuthed()
               ? `
-                <form id="commentForm" class="card commentForm">
+                <form id="newCommentForm" class="card commentForm">
                   <textarea
                     name="body"
                     rows="4"
@@ -860,7 +880,7 @@ async function renderPostDetail(id) {
                             ${escapeHtml(comment.body || "").replace(/\n/g, "<br>")}
                           </div>
 
-                          ${typeof renderCommentActions === "function" ? renderCommentActions(comment, post.id) : ""}
+                          ${renderCommentActions(comment)}
                         </article>
                       `;
                     })
@@ -872,46 +892,16 @@ async function renderPostDetail(id) {
       </div>
     `;
 
-    const commentForm = document.getElementById("commentForm");
-    if (commentForm) {
-      commentForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-
-        const fd = new FormData(commentForm);
-        const body = String(fd.get("body") || "").trim();
-        if (!body) return;
-
-        const submitBtn = commentForm.querySelector('button[type="submit"]');
-        const originalText = submitBtn?.textContent || "Přidat komentář";
-
-        try {
-          if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.textContent = "Odesílám…";
-          }
-
-          await api(`/posts/${id}/comments`, {
-            method: "POST",
-            auth: true,
-            body: { body },
-          });
-
-          await renderPostDetail(id);
-        } catch (err) {
-          alert(err.message || "Nepodařilo se přidat komentář.");
-        } finally {
-          if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalText;
-          }
-        }
-      });
-    }
-
     bindVoteButtons();
+    bindDetailActions(id, page);
     renderAuthUI();
   } catch (e) {
-    $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
+    $app.innerHTML = `
+      <div class="card">
+        Chyba: <b>${escapeHtml(e.message)}</b>
+      </div>
+    `;
+    renderAuthUI();
   }
 }
 
