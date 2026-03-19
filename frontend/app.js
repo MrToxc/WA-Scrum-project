@@ -36,13 +36,7 @@ function formatCommentsCount(count) {
   if (n >= 2 && n <= 4) return `${n} komentáře`;
   return `${n} komentářů`;
 }
-function formatCommentsCount(count) {
-  const n = Number(count ?? 0);
 
-  if (n === 1) return "1 komentář";
-  if (n >= 2 && n <= 4) return `${n} komentáře`;
-  return `${n} komentářů`;
-}
 
 function setCookie(name, value, maxAgeSeconds = 60 * 60 * 24 * 365) {
   document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}`;
