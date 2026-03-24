@@ -9,6 +9,7 @@ import {
   normalizeVoteState,
   mergeVotedItem,
   getAvatarUrl,
+  trackUtm,
 } from "./api.js";
 
 const $app = document.getElementById("app");
@@ -28,6 +29,14 @@ function getCookie(name) {
   );
   return m ? decodeURIComponent(m[1]) : null;
 }
+function formatCommentsCount(count) {
+  const n = Number(count ?? 0);
+
+  if (n === 1) return "1 komentář";
+  if (n >= 2 && n <= 4) return `${n} komentáře`;
+  return `${n} komentářů`;
+}
+
 
 function setCookie(name, value, maxAgeSeconds = 60 * 60 * 24 * 365) {
   document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}`;
@@ -85,11 +94,7 @@ function saveUtmToCookies(utm) {
 }
 
 function sendUtmToBackend(utm) {
-  fetch("/api/v1/track", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(utm),
-  }).catch(() => {});
+  trackUtm(utm).catch(() => {});
 }
 
 function maybeTrackUtm() {
@@ -448,14 +453,16 @@ async function renderPosts({ page = 1 } = {}) {
         <div class="muted">Veřejné čtení • Porušení pravidel může být moderováno.</div>
       </div>
     </div>
+
     <div class="card muted">Načítám…</div>
   `;
 
   try {
     const perPage = 10;
     const payload = await api(`/posts?per_page=${perPage}&page=${encodeURIComponent(page)}`, {
-      auth: isAuthed()
+      auth: isAuthed(),
     });
+
     const posts = payload?.data ?? [];
     const meta = getPageMeta(payload?.meta ?? {});
 
@@ -470,36 +477,69 @@ async function renderPosts({ page = 1 } = {}) {
 
     $app.innerHTML = `
       <div class="list">
-        ${posts.map((p) => {
-          const author = resolveAuthor(p);
-          return `
-            <div class="card postCard">
-              <div class="row cardHead">
-                <div style="flex:1; min-width:0;">
-                  <a href="#/post/${encodeURIComponent(p.id)}" class="postLink">
-                    <h2 class="postTitle">${escapeHtml(p.title)}</h2>
-                  </a>
-                  <div class="metaRow">
-                    ${renderAuthor(author)}
-                    <div class="muted">• ${escapeHtml(timeAgo(p.created_at))}</div>
-                    <div class="muted">• ${Number(p.comments_count ?? 0)} komentářů</div>
+        ${posts
+          .map((p) => {
+            const author = resolveAuthor(p);
+
+            return `
+              <article class="card postCard">
+                <div class="row cardHead cardHead--post">
+                  <div class="postCard__main">
+                    <a href="#/post/${encodeURIComponent(p.id)}" class="postLink">
+                      <h2 class="postTitle">${escapeHtml(p.title)}</h2>
+                    </a>
+
+                    <div class="metaRow metaRow--post">
+                      <div class="metaRow__author">
+                        ${renderAuthor(author)}
+                      </div>
+
+                      <div class="metaInfo">
+                        <span class="metaChip">
+                          <span class="metaChip__icon">🕒</span>
+                          <span>${escapeHtml(timeAgo(p.created_at))}</span>
+                        </span>
+
+                        <span class="metaDot">•</span>
+
+                        <span class="metaChip">
+                          <span class="metaChip__icon">💬</span>
+                          <span>${formatCommentsCount(p.comments_count)}</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="postCard__votes">
+                    ${renderReactionControls(p, "post")}
                   </div>
                 </div>
-                ${renderReactionControls(p, "post")}
-              </div>
 
-              <div class="postBody postBody--preview">${escapeHtml(p.body || "")}</div>
-              <a class="postMoreLink" href="#/post/${encodeURIComponent(p.id)}">Zobrazit celý příspěvek →</a>
-              ${renderPostActions(p)}
-            </div>
-          `;
-        }).join("")}
+                <div class="postBody postBody--preview">${escapeHtml(p.body || "")}</div>
+
+                <div class="postCard__footer">
+                  <a class="postMoreLink" href="#/post/${encodeURIComponent(p.id)}">
+                    Zobrazit celý příspěvek →
+                  </a>
+
+                  ${renderPostActions(p)}
+                </div>
+              </article>
+            `;
+          })
+          .join("")}
       </div>
 
       <div class="row pagerRow">
-        <a class="btn ${meta.current <= 1 ? "is-disabled" : ""}" href="#/?page=${Math.max(1, meta.current - 1)}">← Předchozí</a>
+        <a class="btn ${meta.current <= 1 ? "is-disabled" : ""}" href="#/?page=${Math.max(1, meta.current - 1)}">
+          ← Předchozí
+        </a>
+
         <div class="muted">Strana ${meta.current} / ${meta.last}</div>
-        <a class="btn ${meta.current >= meta.last ? "is-disabled" : ""}" href="#/?page=${Math.min(meta.last, meta.current + 1)}">Další →</a>
+
+        <a class="btn ${meta.current >= meta.last ? "is-disabled" : ""}" href="#/?page=${Math.min(meta.last, meta.current + 1)}">
+          Další →
+        </a>
       </div>
     `;
 
@@ -508,7 +548,6 @@ async function renderPosts({ page = 1 } = {}) {
     renderAuthUI();
   } catch (e) {
     $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
-    renderAuthUI();
   }
 }
 
@@ -693,82 +732,184 @@ function renderNewPost() {
 }
 
 async function renderPostDetail(id, { page = 1 } = {}) {
-  $app.innerHTML = `<div class="card muted">Načítám…</div>`;
+  $app.innerHTML = `
+    <div class="card muted">Načítám příspěvek…</div>
+  `;
 
   try {
-    const postWrap = await api(`/posts/${encodeURIComponent(id)}`, { auth: isAuthed() });
-    const p = postWrap?.data;
+    const raw = await api(`/posts/${id}`, { auth: isAuthed() });
+    const post = normalizeVoteState(raw?.data ?? raw);
+    const author = resolveAuthor(post);
 
-    const commentsWrap = await api(
-      `/posts/${encodeURIComponent(id)}/comments?page=${encodeURIComponent(page)}&per_page=10`,
-      { auth: isAuthed() }
-    );
-    const comments = commentsWrap?.data ?? [];
-    const commentsMeta = getPageMeta(commentsWrap?.meta ?? {});
-    const author = resolveAuthor(p);
+    const commentsRaw = await api(`/posts/${id}/comments`, { auth: isAuthed() });
+    const comments =
+      Array.isArray(commentsRaw?.data) ? commentsRaw.data :
+      Array.isArray(commentsRaw?.data?.data) ? commentsRaw.data.data :
+      [];
+
+    const commentsMeta = commentsRaw?.meta ?? commentsRaw?.data?.meta ?? null;
+    const commentsCount =
+      post.comments_count ??
+      commentsMeta?.total ??
+      comments.length ??
+      0;
 
     $app.innerHTML = `
-      <div class="row pageHead">
-        <a class="btn" href="#/">← Zpět</a>
-        ${renderReactionControls(p, "post")}
-      </div>
-
-      <div class="card" style="margin-top:12px;">
-        <h1 style="margin-top:0">${escapeHtml(p.title)}</h1>
-        <div class="metaRow">
-          ${renderAuthor(author)}
-          <div class="muted">• ${escapeHtml(timeAgo(p.created_at))}</div>
-          <div class="muted">• ${Number(p.comments_count ?? 0)} komentářů</div>
+      <div class="detailPage">
+        <div class="row">
+          <a class="btn" href="#/?page=${page}">← Zpět</a>
         </div>
-        <div class="postBody">${escapeHtml(p.body || "")}</div>
-        ${renderPostActions(p)}
-      </div>
 
-      <div class="card" style="margin-top:12px;">
-        <h2 style="margin-top:0">Komentáře</h2>
+        <article class="card postCard postCard--detail">
+          <div class="postCard__main">
+            <h1 class="postTitle postTitle--detail">${escapeHtml(post.title || "")}</h1>
 
-        ${comments.length ? comments.map((c) => {
-          const cauthor = resolveAuthor(c);
-          return `
-            <div class="card commentCard">
-              <div class="row cardHead">
-                <div>
-                  <div class="metaRow">
-                    ${renderAuthor(cauthor)}
-                    <div class="muted">• ${escapeHtml(timeAgo(c.created_at))}</div>
-                  </div>
-                </div>
-                ${renderReactionControls(c, "comment")}
+            <div class="metaRow metaRow--post">
+              <div class="metaRow__author">
+                ${renderAuthor(author)}
               </div>
-              <div class="postBody">${escapeHtml(c.body || "")}</div>
-              ${renderCommentActions(c)}
+
+              <div class="metaInfo">
+                <span class="metaChip">
+                  <span class="metaChip__icon">🕒</span>
+                  <span>${escapeHtml(timeAgo(post.created_at))}</span>
+                </span>
+
+                <span class="metaDot">•</span>
+
+                <span class="metaChip">
+                  <span class="metaChip__icon">💬</span>
+                  <span>${formatCommentsCount(commentsCount)}</span>
+                </span>
+              </div>
             </div>
-          `;
-        }).join("") : `<div class="muted">Zatím žádné komentáře.</div>`}
 
-        <div class="row pagerRow ${comments.length ? "" : "hidden"}">
-          <a class="btn ${commentsMeta.current <= 1 ? "is-disabled" : ""}" href="#/post/${encodeURIComponent(id)}?page=${Math.max(1, commentsMeta.current - 1)}">← Předchozí</a>
-          <div class="muted">Komentáře ${commentsMeta.current} / ${commentsMeta.last}</div>
-          <a class="btn ${commentsMeta.current >= commentsMeta.last ? "is-disabled" : ""}" href="#/post/${encodeURIComponent(id)}?page=${Math.min(commentsMeta.last, commentsMeta.current + 1)}">Další →</a>
-        </div>
+            <div class="postCard__votes postCard__votes--detail">
+              ${renderReactionControls(post, "post")}
+            </div>
 
-        ${isAuthed() ? `
-          <div style="height:14px"></div>
-          <form id="newCommentForm">
-            <label class="muted">Napsat komentář</label>
-            <textarea name="body" required minlength="2" maxlength="2000" placeholder="Komentář…"></textarea>
-            <div style="height:10px"></div>
-            <button class="btn btn--primary" type="submit">Přidat</button>
-          </form>
-        ` : `<div class="muted">Pro psaní komentářů se přihlas.</div>`}
+            <div class="postBody postBody--detail">
+              ${escapeHtml(post.body || "").replace(/\n/g, "<br>")}
+            </div>
+
+            ${renderPostActions(post)}
+          </div>
+        </article>
+
+        <section class="commentsSection">
+          <h2>Komentáře</h2>
+
+          ${
+            isAuthed()
+              ? `
+                <form id="newCommentForm" class="card commentForm">
+                  <textarea
+                    name="body"
+                    rows="4"
+                    maxlength="2000"
+                    placeholder="Napiš komentář..."
+                    required
+                  ></textarea>
+                  <div class="row">
+                    <button class="btn primary" type="submit">Přidat komentář</button>
+                  </div>
+                </form>
+              `
+              : `
+                <div class="card muted">
+                  Pro přidání komentáře se musíš přihlásit.
+                </div>
+              `
+          }
+
+          <div class="list commentsList">
+            ${
+              comments.length
+                ? comments.map((c) => {
+                    const comment = normalizeVoteState(c);
+                    const commentAuthor = resolveAuthor(comment);
+
+                    return `
+                      <article class="card commentCard" data-comment-id="${comment.id}">
+                        <div class="commentCard__head">
+                          <div class="commentCard__meta">
+                            ${renderAuthor(commentAuthor)}
+
+                            <div class="metaInfo">
+                              <span class="metaChip">
+                                <span class="metaChip__icon">🕒</span>
+                                <span>${escapeHtml(timeAgo(comment.created_at))}</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div class="commentCard__votes">
+                            ${renderReactionControls(comment, "comment")}
+                          </div>
+                        </div>
+
+                        <div class="commentBody">
+                          ${escapeHtml(comment.body || "").replace(/\n/g, "<br>")}
+                        </div>
+
+                        ${typeof renderCommentActions === "function" ? renderCommentActions(comment) : ""}
+                      </article>
+                    `;
+                  }).join("")
+                : `<div class="card muted">Zatím žádné komentáře.</div>`
+            }
+          </div>
+        </section>
       </div>
     `;
 
-    bindDetailActions(id, page);
+    const commentForm = document.getElementById("newCommentForm");
+    if (commentForm) {
+      commentForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const fd = new FormData(commentForm);
+        const body = String(fd.get("body") || "").trim();
+        if (!body) return;
+
+        const submitBtn = commentForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn?.textContent || "Přidat komentář";
+
+        try {
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Odesílám…";
+          }
+
+          await api(`/posts/${id}/comments`, {
+            method: "POST",
+            auth: true,
+            body: { body },
+          });
+
+          await renderPostDetail(id, { page });
+        } catch (err) {
+          alert(err.message || "Nepodařilo se přidat komentář.");
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+          }
+        }
+      });
+    }
+
     bindVoteButtons();
+    if (typeof bindDetailActions === "function") {
+      bindDetailActions(id, page);
+    }
     renderAuthUI();
   } catch (e) {
-    $app.innerHTML = `<div class="card">Chyba: <b>${escapeHtml(e.message)}</b></div>`;
+    $app.innerHTML = `
+      <div class="card">
+        Chyba: <b>${escapeHtml(e.message)}</b>
+      </div>
+    `;
     renderAuthUI();
   }
 }

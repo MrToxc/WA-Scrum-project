@@ -12,8 +12,8 @@ export function getUsername() {
 }
 
 export function getUserId() {
-  const v = localStorage.getItem("user_id");
-  return v ? Number(v) : null;
+  const raw = localStorage.getItem("user_id");
+  return raw == null ? null : Number(raw);
 }
 
 export function isAdmin() {
@@ -39,6 +39,39 @@ export function getAvatarUrl(username) {
   return `https://avatars.laravel.cloud/${safeName}`;
 }
 
+function getCookie(name) {
+  const m = document.cookie.match(
+    new RegExp("(?:^|; )" + name.replace(/([.$?*|{}()\[\]\\\/+^])/g, "\\$1") + "=([^;]*)")
+  );
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+export function getStoredUtm() {
+  const utm = {
+    utm_source: getCookie("utm_source"),
+    utm_medium: getCookie("utm_medium"),
+    utm_campaign: getCookie("utm_campaign"),
+  };
+
+  Object.keys(utm).forEach((key) => {
+    if (!utm[key]) delete utm[key];
+  });
+
+  return utm;
+}
+
+function appendUtmToBody(body) {
+  if (body == null) return body;
+  if (typeof body !== "object") return body;
+  if (Array.isArray(body)) return body;
+
+  const utm = getStoredUtm();
+  return {
+    ...body,
+    ...utm,
+  };
+}
+
 async function parseJsonSafe(res) {
   const text = await res.text();
   try {
@@ -58,6 +91,7 @@ function pickLaravelError(data, status) {
   }
 
   const raw = String(data?.error || data?.message || "").trim();
+
   const map = {
     Unauthorized: "Musíš se přihlásit.",
     Forbidden: "Na tohle nemáš oprávnění.",
@@ -73,12 +107,15 @@ function pickLaravelError(data, status) {
   if (status === 403) return "Na tohle nemáš oprávnění.";
   if (status === 404) return "Požadovaný obsah nebyl nalezen.";
   if (status >= 500) return "Na serveru nastala chyba.";
+
   return raw || `HTTP ${status}`;
 }
 
 export async function api(path, { method = "GET", body = null, auth = false } = {}) {
+  const finalBody = appendUtmToBody(body);
+
   const headers = { Accept: "application/json" };
-  if (body != null) headers["Content-Type"] = "application/json";
+  if (finalBody != null) headers["Content-Type"] = "application/json";
 
   if (auth) {
     const t = getToken();
@@ -88,7 +125,7 @@ export async function api(path, { method = "GET", body = null, auth = false } = 
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers,
-    body: body != null ? JSON.stringify(body) : null,
+    body: finalBody != null ? JSON.stringify(finalBody) : null,
   });
 
   const data = await parseJsonSafe(res);

@@ -1,7 +1,7 @@
 :root {
   --border: #e5e7eb;
   --text: #0f172a;
-  --muted: #64748b;
+  --muted: #475569;
   --bg: #ffffff;
   --bg2: #f8fafc;
   --input-bg: #ffffff;
@@ -14,12 +14,13 @@
   --danger: #dc2626;
   --danger-border: rgba(248, 113, 113, 0.4);
   --danger-bg: rgba(254, 226, 226, 0.8);
+  --card-text: #0f172a;
 }
 
 html.dark {
   --border: rgba(148, 163, 184, 0.25);
-  --text: #e5e7eb;
-  --muted: #94a3b8;
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.72);
   --bg: #071121;
   --bg2: #0f172a;
   --input-bg: #0b1220;
@@ -31,6 +32,7 @@ html.dark {
   --primary-bg: rgba(99, 102, 241, 0.18);
   --danger-border: rgba(248, 113, 113, 0.35);
   --danger-bg: rgba(127, 29, 29, 0.25);
+  --card-text: rgba(255, 255, 255, 0.92);
 }
 
 * { box-sizing: border-box; }
@@ -803,4 +805,240 @@ input {
 
 .footerLink:hover {
   text-decoration: underline;
+}
+
+.postCard {
+  padding: 22px;
+  border-radius: 24px;
+}
+
+.cardHead--post {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.postCard__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.postCard__votes {
+  flex-shrink: 0;
+}
+
+.metaRow--post {
+  margin-top: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.metaRow__author {
+  min-width: 0;
+}
+
+.metaInfo {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.metaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.metaChip__icon {
+  opacity: 0.85;
+  font-size: 0.95em;
+}
+
+.metaDot {
+  opacity: 0.45;
+}
+
+.postTitle {
+  margin: 0;
+  line-height: 1.2;
+}
+
+.postBody {
+  margin-top: 16px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.postCard__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.postMoreLink {
+  margin-top: 0;
+}
+
+.pill--votes {
+  min-height: 52px;
+}
+
+@media (max-width: 900px) {
+  .cardHead--post {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .postCard__votes {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .metaRow--post {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .metaRow__author {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .postCard {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .metaInfo {
+    gap: 6px;
+    font-size: 0.92rem;
+  }
+
+  .metaDot {
+    display: none;
+  }
+
+  .postCard__footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .postCard__footer .actionRow {
+    width: 100%;
+  }
+}
+
+.postCard--detail {
+  padding: 22px;
+  border-radius: 24px;
+}
+
+.postTitle--detail {
+  margin: 0 0 10px;
+  line-height: 1.15;
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+.postCard__votes--detail {
+  margin-top: 18px;
+  margin-bottom: 18px;
+  width: fit-content;
+}
+
+.postBody--detail {
+  margin-top: 10px;
+  font-size: 1.04rem;
+  line-height: 1.75;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.commentsSection {
+  margin-top: 22px;
+}
+
+.commentsSection h2 {
+  margin: 0 0 14px;
+}
+
+.commentForm {
+  margin-bottom: 16px;
+}
+
+.commentForm textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 110px;
+}
+
+.commentsList {
+  display: grid;
+  gap: 14px;
+}
+
+.commentCard {
+  padding: 18px;
+  border-radius: 20px;
+}
+
+.commentCard__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.commentCard__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.commentCard__votes {
+  flex-shrink: 0;
+}
+
+.commentBody {
+  margin-top: 14px;
+  line-height: 1.65;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .commentCard__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .commentCard__votes {
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .postTitle--detail {
+    font-size: 2.2rem;
+  }
+
+  .postCard--detail {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .commentCard {
+    padding: 16px;
+  }
 }
