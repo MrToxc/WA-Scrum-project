@@ -1,9 +1,5 @@
 # Předávací zpráva – Sysadmin (Forum Ječná)
 
-> Dokument obsahuje pouze části: **Předávací zpráva (sysadmin)**, **Tech stack**, **Architektura systému**, **Trasovatelnost**.
-
----
-
 ## 1) Předávací zpráva – sysadmin
 
 ### 1.1 Základní informace
@@ -64,7 +60,7 @@ Cílem sysadmin části je zajistit provoz aplikace na VPS, bezpečný přístup
 
 ### 1.9 Provozní postupy (rychlý runbook)
 - Restart webu:
-  - `sudo systemctl restart nginx php8.3-fpm`
+  - `sudo systemctl restart nginx php8.4-fpm`
 - Kontrola logů:
   - `sudo tail -n 100 /var/log/nginx/error.log`
   - `sudo tail -n 100 /srv/app/WA-Scrum-project/forum-api-app/storage/logs/laravel.log`
@@ -116,11 +112,11 @@ Váhy (důležitost):
 #### Databáze
 | Technologie | Nasazení (5) | Jednoduchost (5) | Stabilita (5) | Správa (3) | Skóre |
 |---|---:|---:|---:|---:|---:|
-| SQLite | 5×5 | 5×5 | 4×5 | 2×3 | **76** |
-| MariaDB | 4×5 | 3×5 | 5×5 | 4×3 | 72 |
+| SQLite | 5×5 | 5×5 | 3×5 | 2×3 | 71 |
+| MariaDB | 4×5 | 4×5 | 5×5 | 5×3 | **80** |
 | PostgreSQL | 4×5 | 3×5 | 5×5 | 4×3 | 72 |
 
-**Rozhodnutí:** SQLite – nejjednodušší nasazení (soubor), minimální infrastruktura. (Pozn.: pro větší provoz vhodnější MariaDB/Postgres.)
+**Rozhodnutí:** MariaDB – nejstabilnější v poměru jednoduchosti, nasazení a správě databáze
 
 #### Log analytics / reporting
 | Technologie | Jednoduchost (5) | Výstupy (4) | Provozní náklady (4) | Skóre |
@@ -141,7 +137,7 @@ Váhy (důležitost):
 3) **nginx (web server / reverse proxy)** – statický frontend + routování API na backend  
 4) **Frontend (SPA, statické soubory)** – běží v browseru, volá `/api/v1/*`  
 5) **Backend (Laravel API)** – zpracování požadavků, autentizace, CRUD  
-6) **Databáze (SQLite)** – persistentní data aplikace (`database.sqlite`)  
+6) **Databáze (MariaDB)** – persistentní data aplikace  
 7) **Logy a reporty (GoAccess)** – nginx access log → HTML report + refresh script
 
 ### 3.2 Komunikace a datové toky
@@ -153,7 +149,7 @@ Váhy (důležitost):
 
 Browser ──HTTPS──> nginx ──static──> /var/www/html (Frontend)
                      │
-                     └──/api/*──FastCGI──> php8.4-fpm ──> Laravel API ──> SQLite DB
+                     └──/api/*──FastCGI──> php8.4-fpm ──> Laravel API ──> MariaDB
 
 Logs: /var/log/nginx/access.log* ──> GoAccess ──> /reports/report.html
 
@@ -170,7 +166,7 @@ Logs: /var/log/nginx/access.log* ──> GoAccess ──> /reports/report.html
 |---|---|---|---|---|
 | REQ-INF-01 | UC-INF-01 Nasazení aplikace | VPS + nginx | `/srv/app/WA-Scrum-project`, `/etc/nginx/sites-available/duck` | `curl -I https://forumjecna.app/` |
 | REQ-INF-02 | UC-INF-01 Nasazení aplikace | Frontend hosting | `/var/www/html` (deploy z `frontend/`) | otevřít `/` v prohlížeči, `curl -I /` |
-| REQ-INF-03 | UC-INF-01/02 Provoz API | nginx + PHP-FPM + Laravel | nginx location `/api/`, `php8.3-fpm.sock`, `forum-api-app/public/index.php` | `curl https://forumjecna.app/api/v1/posts` (200 JSON) |
+| REQ-INF-03 | UC-INF-01/02 Provoz API | nginx + PHP-FPM + Laravel | nginx location `/api/`, `php8.4-fpm.sock`, `forum-api-app/public/index.php` | `curl https://forumjecna.app/api/v1/posts` (200 JSON) |
 | REQ-INF-04 | UC-INF-01 Deploy verze | Deploy script | `/srv/app/WA-Scrum-project/deploy.sh` | spustit `./deploy.sh` + ověřit `/` a `/api` |
 | REQ-INF-05 | UC-INF-03 Log analýza | nginx logy | `/var/log/nginx/access.log*` | `tail access.log`, kontrola rotace |
 | REQ-INF-06 | UC-INF-03 Log report | GoAccess | `goaccess … -o report.html`, `/usr/local/bin/refresh-report.sh` | otevřít `/reports/report.html` |
