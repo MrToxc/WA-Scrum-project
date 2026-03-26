@@ -2,7 +2,7 @@
 
 ---
 
-## 6. Rozhodnutí o technologiích (Tech Stack)
+## 1. Rozhodnutí o technologiích (Tech Stack)
 
 ### Identifikace technologického rozhodnutí
 
@@ -64,7 +64,7 @@ Frontend plní pouze prezentační roli, proto není nutné používat framework
 
 ---
 
-## 7. Architektura systému (frontend)
+## 2. Architektura systému (frontend)
 
 ### Přehled architektury
 
@@ -214,7 +214,7 @@ Frontend byl vytvořen jako jednoduchá klientská aplikace bez frameworku.
 - backend řeší logiku  
 - frontend zobrazuje data  
 - komunikace probíhá přes REST API  
-  ## 13. Testování (analýza stavu)
+## 3. Testování (analýza stavu)
 
 ### Cíl testování
 
